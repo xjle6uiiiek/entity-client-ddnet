@@ -37,7 +37,7 @@ vec2 CQuickActions::GetCursorWorldPos() const
 
 	vec2 Position = GameClient()->m_CursorInfo.Position();
 
-	const float Zoom = (GameClient()->m_Camera.m_Zooming && GameClient()->m_Camera.m_AutoSpecCameraZooming) ? GameClient()->m_Camera.m_Zoom : GameClient()->m_Snap.m_SpecInfo.m_Zoom;
+	const float Zoom = GameClient()->m_Camera.m_Zoom;
 	vec2 WorldTarget = Position + (Target - TargetCameraOffset) * Zoom + TargetCameraOffset;
 
 	return WorldTarget;
@@ -178,9 +178,8 @@ void CQuickActions::OnConsoleInit()
 		pConfigManager->RegisterCallback(ConfigSaveCallback, this, ConfigDomain::ENTITYQUICKACTIONS);
 
 	Console()->Register("+quickactions", "", CFGFLAG_CLIENT, ConOpenQuickActionMenu, this, "Open quick action menu");
-
-	Console()->Register("add_quickaction", "s[name] s[command]", CFGFLAG_CLIENT, ConAddQuickAction, this, "Add a bind to the quick action menu");
-	Console()->Register("remove_quickaction", "s[name] s[command]", CFGFLAG_CLIENT, ConRemoveQuickAction, this, "Remove a bind from the quick action menu");
+	Console()->Register("add_quickaction", "s[name] r[command]", CFGFLAG_CLIENT, ConAddQuickAction, this, "Add a bind to the quick action menu");
+	Console()->Register("remove_quickaction", "s[name] r[command]", CFGFLAG_CLIENT, ConRemoveQuickAction, this, "Remove a bind from the quick action menu");
 	Console()->Register("reset_all_quickactions", "", CFGFLAG_CLIENT, ConResetAllQuickActions, this, "Resets quick actions to the default ones");
 	Console()->Register("delete_all_quickactions", "", CFGFLAG_CLIENT, ConRemoveAllQuickActions, this, "Removes all quick actions");
 }

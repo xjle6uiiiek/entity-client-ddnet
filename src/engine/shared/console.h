@@ -31,7 +31,6 @@ class CConsole : public IConsole
 		FCommandCallback m_pfnCallback;
 		void *m_pUserData;
 
-		const ICommandInfo *NextCommandInfo(EAccessLevel AccessLevel, int FlagMask) const override;
 		const char *Name() const override { return m_pName; }
 		const char *Help() const override { return m_pHelp; }
 		const char *Params() const override { return m_pParams; }
@@ -75,7 +74,7 @@ class CConsole : public IConsole
 	static void ConCommandAccess(IResult *pResult, void *pUser);
 	static void ConCommandStatus(IConsole::IResult *pResult, void *pUser);
 
-	void ExecuteLineStroked(int Stroke, const char *pStr, int ClientId = -1, bool InterpretSemicolons = true) override;
+	void ExecuteLineStroked(int Stroke, const char *pStr, int ClientId = IConsole::CLIENT_ID_UNSPECIFIED, bool InterpretSemicolons = true) override;
 
 	FTeeHistorianCommandCallback m_pfnTeeHistorianCommandCallback;
 	void *m_pTeeHistorianCommandUserdata;
@@ -168,6 +167,7 @@ public:
 
 	void Init() override;
 	const ICommandInfo *FirstCommandInfo(EAccessLevel AccessLevel, int FlagMask) const override;
+	const ICommandInfo *NextCommandInfo(const IConsole::ICommandInfo *pInfo, EAccessLevel AccessLevel, int FlagMask) const override;
 	const ICommandInfo *GetCommandInfo(const char *pName, int FlagMask, bool Temp) override;
 	int PossibleCommands(const char *pStr, int FlagMask, bool Temp, FPossibleCallback pfnCallback, void *pUser) override;
 
@@ -180,9 +180,9 @@ public:
 	void StoreCommands(bool Store) override;
 
 	bool LineIsValid(const char *pStr) override;
-	void ExecuteLine(const char *pStr, int ClientId = -1, bool InterpretSemicolons = true) override;
-	void ExecuteLineFlag(const char *pStr, int FlagMask, int ClientId = -1, bool InterpretSemicolons = true) override;
-	bool ExecuteFile(const char *pFilename, int ClientId = -1, bool LogFailure = false, int StorageType = IStorage::TYPE_ALL) override;
+	void ExecuteLine(const char *pStr, int ClientId = IConsole::CLIENT_ID_UNSPECIFIED, bool InterpretSemicolons = true) override;
+	void ExecuteLineFlag(const char *pStr, int FlagMask, int ClientId = IConsole::CLIENT_ID_UNSPECIFIED, bool InterpretSemicolons = true) override;
+	bool ExecuteFile(const char *pFilename, int ClientId = IConsole::CLIENT_ID_UNSPECIFIED, bool LogFailure = false, int StorageType = IStorage::TYPE_ALL) override;
 
 	void Print(int Level, const char *pFrom, const char *pStr, ColorRGBA PrintColor = gs_ConsoleDefaultColor) const override;
 	void SetTeeHistorianCommandCallback(FTeeHistorianCommandCallback pfnCallback, void *pUser) override;

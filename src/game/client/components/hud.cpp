@@ -1,6 +1,14 @@
 /* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
+#include "hud.h"
+
+#include "binds.h"
+#include "camera.h"
+#include "controls.h"
+#include "voting.h"
+
 #include <base/color.h>
+
 #include <engine/graphics.h>
 #include <engine/shared/config.h>
 #include <engine/textrender.h>
@@ -12,17 +20,10 @@
 #include <game/client/components/scoreboard.h>
 #include <game/client/gameclient.h>
 #include <game/client/prediction/entities/character.h>
-
 #include <game/layers.h>
 #include <game/localization.h>
 
 #include <cmath>
-
-#include "binds.h"
-#include "camera.h"
-#include "controls.h"
-#include "hud.h"
-#include "voting.h"
 
 CHud::CHud()
 {
@@ -1492,22 +1493,22 @@ void CHud::RenderMovementInformation()
 	const CMovementInformation Info = GetMovementInformation(ClientId, g_Config.m_ClDummy);
 
 	float y = StartY + LineSpacer * 2.0f;
-	float xl = StartX + 2.0f;
-	float xr = m_Width - 2.0f;
+	const float LeftX = StartX + 2.0f;
+	const float RightX = m_Width - 2.0f;
 
 	if(g_Config.m_ClShowhudPlayerPosition)
 	{
-		TextRender()->Text(xl, y, Fontsize, Localize("Position:"), -1.0f);
+		TextRender()->Text(LeftX, y, Fontsize, Localize("Position:"), -1.0f);
 		y += MOVEMENT_INFORMATION_LINE_HEIGHT;
 
-		TextRender()->Text(xl, y, Fontsize, "X:", -1.0f);
+		TextRender()->Text(LeftX, y, Fontsize, "X:", -1.0f);
 		UpdateMovementInformationTextContainer(m_aPlayerPositionContainers[0], Fontsize, Info.m_Pos.x, m_aPlayerPrevPosition[0]);
-		RenderMovementInformationTextContainer(m_aPlayerPositionContainers[0], TextRender()->DefaultTextColor(), xr, y);
+		RenderMovementInformationTextContainer(m_aPlayerPositionContainers[0], TextRender()->DefaultTextColor(), RightX, y);
 		y += MOVEMENT_INFORMATION_LINE_HEIGHT;
 
-		TextRender()->Text(xl, y, Fontsize, "Y:", -1.0f);
+		TextRender()->Text(LeftX, y, Fontsize, "Y:", -1.0f);
 		UpdateMovementInformationTextContainer(m_aPlayerPositionContainers[1], Fontsize, Info.m_Pos.y, m_aPlayerPrevPosition[1]);
-		RenderMovementInformationTextContainer(m_aPlayerPositionContainers[1], TextRender()->DefaultTextColor(), xr, y);
+		RenderMovementInformationTextContainer(m_aPlayerPositionContainers[1], TextRender()->DefaultTextColor(), RightX, y);
 		y += MOVEMENT_INFORMATION_LINE_HEIGHT;
 	}
 
@@ -1516,7 +1517,7 @@ void CHud::RenderMovementInformation()
 
 	if(g_Config.m_ClShowhudPlayerSpeed)
 	{
-		TextRender()->Text(xl, y, Fontsize, Localize("Speed:"), -1.0f);
+		TextRender()->Text(LeftX, y, Fontsize, Localize("Speed:"), -1.0f);
 		y += MOVEMENT_INFORMATION_LINE_HEIGHT;
 
 		const char aaCoordinates[][4] = {"X:", "Y:"};
@@ -1527,9 +1528,9 @@ void CHud::RenderMovementInformation()
 				Color = ColorRGBA(0.0f, 1.0f, 0.0f, 1.0f);
 			if(m_aLastPlayerSpeedChange[i] == ESpeedChange::DECREASE)
 				Color = ColorRGBA(1.0f, 0.5f, 0.5f, 1.0f);
-			TextRender()->Text(xl, y, Fontsize, aaCoordinates[i], -1.0f);
+			TextRender()->Text(LeftX, y, Fontsize, aaCoordinates[i], -1.0f);
 			UpdateMovementInformationTextContainer(m_aPlayerSpeedTextContainers[i], Fontsize, i == 0 ? Info.m_Speed.x : Info.m_Speed.y, m_aPlayerPrevSpeed[i]);
-			RenderMovementInformationTextContainer(m_aPlayerSpeedTextContainers[i], Color, xr, y);
+			RenderMovementInformationTextContainer(m_aPlayerSpeedTextContainers[i], Color, RightX, y);
 			y += MOVEMENT_INFORMATION_LINE_HEIGHT;
 		}
 
@@ -1538,11 +1539,11 @@ void CHud::RenderMovementInformation()
 
 	if(g_Config.m_ClShowhudPlayerAngle)
 	{
-		TextRender()->Text(xl, y, Fontsize, Localize("Angle:"), -1.0f);
+		TextRender()->Text(LeftX, y, Fontsize, Localize("Angle:"), -1.0f);
 		y += MOVEMENT_INFORMATION_LINE_HEIGHT;
 
 		UpdateMovementInformationTextContainer(m_PlayerAngleTextContainerIndex, Fontsize, Info.m_Angle, m_PlayerPrevAngle);
-		RenderMovementInformationTextContainer(m_PlayerAngleTextContainerIndex, TextRender()->DefaultTextColor(), xr, y);
+		RenderMovementInformationTextContainer(m_PlayerAngleTextContainerIndex, TextRender()->DefaultTextColor(), RightX, y);
 	}
 }
 

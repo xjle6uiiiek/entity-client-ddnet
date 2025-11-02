@@ -3,6 +3,10 @@
 
 #include "server.h"
 
+#include "databases/connection.h"
+#include "databases/connection_pool.h"
+#include "register.h"
+
 #include <base/logger.h>
 #include <base/math.h>
 #include <base/system.h>
@@ -12,8 +16,6 @@
 #include <engine/engine.h>
 #include <engine/map.h>
 #include <engine/server.h>
-#include <engine/storage.h>
-
 #include <engine/shared/compression.h>
 #include <engine/shared/config.h>
 #include <engine/shared/console.h>
@@ -25,6 +27,7 @@
 #include <engine/shared/http.h>
 #include <engine/shared/json.h>
 #include <engine/shared/jsonwriter.h>
+#include <engine/shared/linereader.h>
 #include <engine/shared/masterserver.h>
 #include <engine/shared/netban.h>
 #include <engine/shared/network.h>
@@ -34,19 +37,14 @@
 #include <engine/shared/protocol_ex.h>
 #include <engine/shared/rust_version.h>
 #include <engine/shared/snapshot.h>
+#include <engine/storage.h>
 
 #include <game/version.h>
 
-// DDRace
-#include <engine/shared/linereader.h>
-#include <vector>
 #include <zlib.h>
 
-#include "databases/connection.h"
-#include "databases/connection_pool.h"
-#include "register.h"
-
 #include <chrono>
+#include <vector>
 
 using namespace std::chrono_literals;
 
@@ -1483,7 +1481,7 @@ int CServer::NumRconCommands(int ClientId)
 	int Num = 0;
 	const IConsole::EAccessLevel AccessLevel = ConsoleAccessLevel(ClientId);
 	for(const IConsole::ICommandInfo *pCmd = Console()->FirstCommandInfo(AccessLevel, CFGFLAG_SERVER);
-		pCmd; pCmd = pCmd->NextCommandInfo(AccessLevel, CFGFLAG_SERVER))
+		pCmd; pCmd = Console()->NextCommandInfo(pCmd, AccessLevel, CFGFLAG_SERVER))
 	{
 		Num++;
 	}
@@ -1504,7 +1502,7 @@ void CServer::UpdateClientRconCommands(int ClientId)
 	for(int i = 0; i < MAX_RCONCMD_SEND && Client.m_pRconCmdToSend; ++i)
 	{
 		SendRconCmdAdd(Client.m_pRconCmdToSend, ClientId);
-		Client.m_pRconCmdToSend = Client.m_pRconCmdToSend->NextCommandInfo(AccessLevel, CFGFLAG_SERVER);
+		Client.m_pRconCmdToSend = Console()->NextCommandInfo(Client.m_pRconCmdToSend, AccessLevel, CFGFLAG_SERVER);
 		if(Client.m_pRconCmdToSend == nullptr)
 		{
 			SendRconCmdGroupEnd(ClientId);
@@ -2625,6 +2623,15 @@ void CServer::UpdateRegisterServerInfo()
 	JsonWriter.WriteAttribute("game_type");
 	JsonWriter.WriteStrValue(GameServer()->GameType());
 
+	if(g_Config.m_SvRegisterCommunityToken[0])
+	{
+		if(g_Config.m_SvFlag != -1)
+		{
+			JsonWriter.WriteAttribute("country");
+			JsonWriter.WriteIntValue(g_Config.m_SvFlag); // ISO 3166-1 numeric
+		}
+	}
+
 	JsonWriter.WriteAttribute("name");
 	JsonWriter.WriteStrValue(g_Config.m_SvName);
 
@@ -2636,6 +2643,11 @@ void CServer::UpdateRegisterServerInfo()
 	JsonWriter.WriteStrValue(aMapSha256);
 	JsonWriter.WriteAttribute("size");
 	JsonWriter.WriteIntValue(m_aCurrentMapSize[MAP_TYPE_SIX]);
+	if(m_aMapDownloadUrl[0])
+	{
+		JsonWriter.WriteAttribute("url");
+		JsonWriter.WriteStrValue(m_aMapDownloadUrl);
+	}
 	JsonWriter.EndObject();
 
 	JsonWriter.WriteAttribute("version");
@@ -3173,6 +3185,26 @@ int CServer::Run()
 					m_ServerInfoFirstRequest = 0;
 					Kernel()->ReregisterInterface(GameServer());
 					Console()->StoreCommands(true);
+
+					for(int ClientId = 0; ClientId < MAX_CLIENTS; ClientId++)
+					{
+						CClient &Client = m_aClients[ClientId];
+						if(Client.m_State < CClient::STATE_PREAUTH)
+							continue;
+
+						// When doing a map change, a new Teehistorian file is created. For players that are already
+						// on the server, no PlayerJoin event is produced in Teehistorian from the network engine.
+						// Record PlayerJoin events here to record the Sixup version and player join event.
+						GameServer()->TeehistorianRecordPlayerJoin(ClientId, Client.m_Sixup);
+
+						// Record the players auth state aswell if needed.
+						// This was recorded in AuthInit in the past.
+						if(IsRconAuthed(ClientId))
+						{
+							GameServer()->TeehistorianRecordAuthLogin(ClientId, GetAuthedState(ClientId), GetAuthName(ClientId));
+						}
+					}
+
 					GameServer()->OnInit(m_pPersistentData);
 					Console()->StoreCommands(false);
 					if(ErrorShutdown())
@@ -3180,16 +3212,6 @@ int CServer::Run()
 						break;
 					}
 					UpdateServerInfo(true);
-					for(int ClientId = 0; ClientId < MAX_CLIENTS; ClientId++)
-					{
-						if(m_aClients[ClientId].m_State != CClient::STATE_CONNECTING)
-							continue;
-
-						// When doing a map change, a new Teehistorian file is created. For players that are already
-						// on the server, no PlayerJoin event is produced in Teehistorian from the network engine.
-						// Record PlayerJoin events here to record the Sixup version and player join event.
-						GameServer()->TeehistorianRecordPlayerJoin(ClientId, m_aClients[ClientId].m_Sixup);
-					}
 				}
 				else
 				{
@@ -3269,7 +3291,7 @@ int CServer::Run()
 				std::vector<std::string> vAndroidCommandQueue = FetchAndroidServerCommandQueue();
 				for(const std::string &Command : vAndroidCommandQueue)
 				{
-					Console()->ExecuteLineFlag(Command.c_str(), CFGFLAG_SERVER, -1);
+					Console()->ExecuteLineFlag(Command.c_str(), CFGFLAG_SERVER, IConsole::CLIENT_ID_UNSPECIFIED);
 				}
 #endif
 
@@ -4186,6 +4208,23 @@ void CServer::ConchainSixupUpdate(IConsole::IResult *pResult, void *pUserData, I
 		pThis->m_MapReload |= (pThis->m_apCurrentMapData[MAP_TYPE_SIXUP] != nullptr) != (pResult->GetInteger(0) != 0);
 }
 
+void CServer::ConchainRegisterCommunityTokenRedact(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData)
+{
+	// community tokens look like this:
+	// ddtc_6DnZq5Ix0J2kvDHbkPNtb6bsZxOVQg4ly2jw. The first 11 bytes are
+	// shared between the token and the verification token, so they're
+	// semi-public. Redact everything beyond that point.
+	static constexpr int REDACT_FROM = 11;
+	if(pResult->NumArguments() == 0 && str_length(g_Config.m_SvRegisterCommunityToken) > REDACT_FROM)
+	{
+		char aTruncated[16];
+		str_truncate(aTruncated, sizeof(aTruncated), g_Config.m_SvRegisterCommunityToken, REDACT_FROM);
+		log_info("config", "Value: %s[REDACTED] (total length %d)", aTruncated, str_length(g_Config.m_SvRegisterCommunityToken));
+		return;
+	}
+	pfnCallback(pResult, pCallbackUserData);
+}
+
 void CServer::ConchainLoglevel(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData)
 {
 	CServer *pSelf = (CServer *)pUserData;
@@ -4206,10 +4245,10 @@ void CServer::ConchainStdoutOutputLevel(IConsole::IResult *pResult, void *pUserD
 	}
 }
 
-void CServer::ConchainAnnouncementFileName(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData)
+void CServer::ConchainAnnouncementFilename(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData)
 {
 	CServer *pSelf = (CServer *)pUserData;
-	bool Changed = pResult->NumArguments() && str_comp(pResult->GetString(0), g_Config.m_SvAnnouncementFileName);
+	bool Changed = pResult->NumArguments() && str_comp(pResult->GetString(0), g_Config.m_SvAnnouncementFilename);
 	pfnCallback(pResult, pCallbackUserData);
 	if(Changed)
 	{
@@ -4307,11 +4346,12 @@ void CServer::RegisterCommands()
 	Console()->Chain("sv_rcon_helper_password", ConchainRconHelperPasswordChange, this);
 	Console()->Chain("sv_map", ConchainMapUpdate, this);
 	Console()->Chain("sv_sixup", ConchainSixupUpdate, this);
+	Console()->Chain("sv_register_community_token", ConchainRegisterCommunityTokenRedact, nullptr);
 
 	Console()->Chain("loglevel", ConchainLoglevel, this);
 	Console()->Chain("stdout_output_level", ConchainStdoutOutputLevel, this);
 
-	Console()->Chain("sv_announcement_filename", ConchainAnnouncementFileName, this);
+	Console()->Chain("sv_announcement_filename", ConchainAnnouncementFilename, this);
 
 	Console()->Chain("sv_input_fifo", ConchainInputFifo, this);
 
@@ -4354,13 +4394,13 @@ void CServer::ReadAnnouncementsFile()
 {
 	m_vAnnouncements.clear();
 
-	if(g_Config.m_SvAnnouncementFileName[0] == '\0')
+	if(g_Config.m_SvAnnouncementFilename[0] == '\0')
 		return;
 
 	CLineReader LineReader;
-	if(!LineReader.OpenFile(m_pStorage->OpenFile(g_Config.m_SvAnnouncementFileName, IOFLAG_READ, IStorage::TYPE_ALL)))
+	if(!LineReader.OpenFile(m_pStorage->OpenFile(g_Config.m_SvAnnouncementFilename, IOFLAG_READ, IStorage::TYPE_ALL)))
 	{
-		log_error("server", "Failed load announcements from '%s'", g_Config.m_SvAnnouncementFileName);
+		log_error("server", "Failed load announcements from '%s'", g_Config.m_SvAnnouncementFilename);
 		return;
 	}
 	while(const char *pLine = LineReader.Get())
@@ -4477,16 +4517,21 @@ int *CServer::GetIdMap(int ClientId)
 
 bool CServer::SetTimedOut(int ClientId, int OrigId)
 {
-	if(!m_NetServer.SetTimedOut(ClientId, OrigId))
+	if(!m_NetServer.HasErrored(ClientId))
 	{
 		return false;
 	}
-	m_aClients[ClientId].m_Sixup = m_aClients[OrigId].m_Sixup;
 
+	// The login was on the current conn, logout should also be on the current conn
 	if(IsRconAuthed(OrigId))
 	{
-		LogoutClient(ClientId, "Timeout Protection");
+		LogoutClient(OrigId, "Timeout Protection");
 	}
+
+	m_NetServer.ResumeOldConnection(ClientId, OrigId);
+
+	m_aClients[ClientId].m_Sixup = m_aClients[OrigId].m_Sixup;
+
 	DelClientCallback(OrigId, "Timeout Protection used", this);
 	m_aClients[ClientId].m_AuthKey = -1;
 	m_aClients[ClientId].m_Flags = m_aClients[OrigId].m_Flags;

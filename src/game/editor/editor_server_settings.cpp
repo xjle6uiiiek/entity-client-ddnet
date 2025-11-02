@@ -1,6 +1,9 @@
 ﻿#include "editor_server_settings.h"
 #include "editor.h"
 
+#include <base/color.h>
+#include <base/system.h>
+
 #include <engine/keys.h>
 #include <engine/shared/config.h>
 #include <engine/textrender.h>
@@ -11,9 +14,6 @@
 #include <game/client/ui_listbox.h>
 #include <game/editor/editor_actions.h>
 #include <game/editor/editor_history.h>
-
-#include <base/color.h>
-#include <base/system.h>
 
 #include <iterator>
 
@@ -1011,7 +1011,7 @@ void CEditor::RenderMapSettingsErrorDialog()
 	if(DoButton_Editor(&s_CancelButton, "Cancel", 0, &CancelButton, BUTTONFLAG_LEFT, nullptr) || (Ui()->ConsumeHotkey(CUi::HOTKEY_ESCAPE)))
 	{
 		Reset();
-		m_aFileName[0] = 0;
+		m_aFilename[0] = 0;
 		OnDialogClose();
 	}
 }

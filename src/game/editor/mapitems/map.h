@@ -33,16 +33,16 @@ class CQuad;
 
 class CDataFileWriterFinishJob : public IJob
 {
-	char m_aRealFileName[IO_MAX_PATH_LENGTH];
-	char m_aTempFileName[IO_MAX_PATH_LENGTH];
+	char m_aRealFilename[IO_MAX_PATH_LENGTH];
+	char m_aTempFilename[IO_MAX_PATH_LENGTH];
 	CDataFileWriter m_Writer;
 
 	void Run() override;
 
 public:
-	CDataFileWriterFinishJob(const char *pRealFileName, const char *pTempFileName, CDataFileWriter &&Writer);
-	const char *GetRealFileName() const { return m_aRealFileName; }
-	const char *GetTempFileName() const { return m_aTempFileName; }
+	CDataFileWriterFinishJob(const char *pRealFilename, const char *pTempFilename, CDataFileWriter &&Writer);
+	const char *GetRealFilename() const { return m_aRealFilename; }
+	const char *GetTempFilename() const { return m_aTempFilename; }
 };
 
 class CEditorMap
@@ -51,17 +51,23 @@ public:
 	explicit CEditorMap(CEditor *pEditor) :
 		m_pEditor(pEditor)
 	{
-		Clean();
 	}
 
-	CEditor *Editor() const { return m_pEditor; }
+	const CEditor *Editor() const { return m_pEditor; }
+	CEditor *Editor() { return m_pEditor; }
 
-	bool m_Modified; // unsaved changes in manual save
-	bool m_ModifiedAuto; // unsaved changes in autosave
+	/**
+	 * Map has unsaved changes for manual save.
+	 */
+	bool m_Modified;
+	/**
+	 * Map has unsaved changes for autosave.
+	 */
+	bool m_ModifiedAuto;
 	float m_LastModifiedTime;
 	float m_LastSaveTime;
-	float m_LastAutosaveUpdateTime;
 	void OnModify();
+	void ResetModifiedState();
 
 	std::vector<std::shared_ptr<CLayerGroup>> m_vpGroups;
 	std::vector<std::shared_ptr<CEditorImage>> m_vpImages;
@@ -90,6 +96,9 @@ public:
 	};
 	CMapInfo m_MapInfo;
 	CMapInfo m_MapInfoTmp;
+
+	int m_SelectedImage;
+	int m_SelectedSound;
 
 	std::shared_ptr<CEnvelope> NewEnvelope(CEnvelope::EType Type);
 	void InsertEnvelope(int Index, std::shared_ptr<CEnvelope> &pEnvelope);
@@ -122,6 +131,19 @@ public:
 	void MakeFrontLayer(const std::shared_ptr<CLayer> &pLayer);
 	void MakeSwitchLayer(const std::shared_ptr<CLayer> &pLayer);
 	void MakeTuneLayer(const std::shared_ptr<CLayer> &pLayer);
+
+	std::shared_ptr<CEditorImage> SelectedImage() const;
+	void SelectImage(const std::shared_ptr<CEditorImage> &pImage);
+	void SelectNextImage();
+	void SelectPreviousImage();
+	bool IsImageUsed(int ImageIndex) const;
+	std::vector<int> SortImages();
+
+	std::shared_ptr<CEditorSound> SelectedSound() const;
+	void SelectSound(const std::shared_ptr<CEditorSound> &pSound);
+	void SelectNextSound();
+	void SelectPreviousSound();
+	bool IsSoundUsed(int SoundIndex) const;
 
 private:
 	CEditor *m_pEditor;

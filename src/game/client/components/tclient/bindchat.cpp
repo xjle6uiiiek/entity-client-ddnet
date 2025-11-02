@@ -200,7 +200,7 @@ void CBindChat::OnConsoleInit()
 	AddDefaultBind("votekick", "votekick");
 	AddDefaultBind("onlineinfo", "OnlineInfo");
 	AddDefaultBind("playerinfo", "PlayerInfo");
-	AddBindDefault(".github", "view_link https://github.com/qxdFox/Entity-Client");
+	AddBindDefault(".github", "view_link https://github.com/FoxNet-DDNet/Entity-Client-DDNet");
 	AddDefaultBind("r", "reply_last");
 
 	AddDefaultBind("friend", "add_friend");
@@ -291,7 +291,7 @@ bool CBindChat::ChatDoBinds(const char *pText)
 	for(const CBind &Bind : m_vBinds)
 	{
 		const bool SendsMessage = str_find(Bind.m_aCommand, "say") ||
-					  str_find(Bind.m_aCommand, "say_team") || str_find(Bind.m_aCommand, "reply_last");
+			str_find(Bind.m_aCommand, "reply_last");
 		if(str_startswith_nocase(pText, Bind.m_aName) &&
 			str_comp_nocase_num(pText, Bind.m_aName, SpaceIndex) == 0)
 		{
@@ -418,6 +418,8 @@ void CBindChat::CacheChatCommands()
 		char CommandBuf[128];
 		str_next_token(ChatBind.m_aCommand, " ", CommandBuf, sizeof(CommandBuf));
 		const IConsole::ICommandInfo *pInfo = GameClient()->Console()->GetCommandInfo(CommandBuf, CFGFLAG_CLIENT, false);
+		if(!pInfo)
+			continue;
 		CChat::CCommand Command(ChatBind.m_aName, pInfo->Params(), pInfo->Help());
 		Command.m_Prefix = ChatBind.m_aName[0];
 		bool Found = false;

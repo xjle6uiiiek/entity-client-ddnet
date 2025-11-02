@@ -1,6 +1,8 @@
 /* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
 
+#include "chat.h"
+
 #include <engine/client/client.h>
 #include <engine/editor.h>
 #include <engine/graphics.h>
@@ -23,9 +25,6 @@
 #include "entity/entity.h"
 #include "tclient/bindchat.h"
 #include "tclient/warlist.h"
-
-#include "chat.h"
-
 #include <vector>
 
 char CChat::ms_aDisplayText[MAX_LINE_LENGTH] = "";
@@ -265,6 +264,7 @@ void CChat::OnConsoleInit()
 	Console()->Register("clear_chat", "", CFGFLAG_CLIENT | CFGFLAG_STORE, ConClearChat, this, "Clear chat messages");
 
 	Console()->Register("set_input", "r[input]", CFGFLAG_CLIENT, ConSetChatInput, this, "Opens chat and sets the input as the message"); // E-Client [Quick Actions]
+	Console()->Register("say_queued", "r[message]", CFGFLAG_CLIENT, ConSayQueued, this, "Say in queue chat"); // E-Client
 }
 
 void CChat::OnInit()
@@ -370,8 +370,8 @@ bool CChat::OnInput(const IInput::CEvent &Event)
 				}
 			}
 			std::stable_sort(m_aPlayerCompletionList, m_aPlayerCompletionList + m_PlayerCompletionListLength,
-				[](const CRateablePlayer &p1, const CRateablePlayer &p2) -> bool {
-					return p1.m_Score < p2.m_Score;
+				[](const CRateablePlayer &Player1, const CRateablePlayer &Player2) -> bool {
+					return Player1.m_Score < Player2.m_Score;
 				});
 		}
 
@@ -545,6 +545,7 @@ void CChat::OnMessage(int MsgType, void *pRawMsg)
 	{
 		CNetMsg_Sv_Chat *pMsg = (CNetMsg_Sv_Chat *)pRawMsg;
 
+		/*
 		if(g_Config.m_ClCensorChat)
 		{
 			char aMessage[MAX_LINE_LENGTH];
@@ -554,6 +555,9 @@ void CChat::OnMessage(int MsgType, void *pRawMsg)
 		}
 		else
 			AddLine(pMsg->m_ClientId, pMsg->m_Team, pMsg->m_pMessage);
+		*/
+
+		AddLine(pMsg->m_ClientId, pMsg->m_Team, pMsg->m_pMessage);
 	}
 	else if(MsgType == NETMSGTYPE_SV_COMMANDINFO)
 	{
@@ -596,6 +600,8 @@ static constexpr const char *SAVES_HEADER[] = {
 	"Code",
 };
 
+// TODO: remove this in a few releases (in 2027 or later)
+//       it got deprecated by CGameClient::StoreSave
 void CChat::StoreSave(const char *pText)
 {
 	const char *pStart = str_find(pText, "Team successfully saved by ");
@@ -1746,6 +1752,14 @@ void CChat::ConSetChatInput(IConsole::IResult *pResult, void *pUserData)
 	CChat *pChat = (CChat *)pUserData;
 	pChat->EnableMode(TEAM_FLOCK);
 	pChat->m_Input.Set(pResult->GetString(0));
+}
+
+void CChat::ConSayQueued(IConsole::IResult *pResult, void *pUserData)
+{
+	CChat *pChat = (CChat *)pUserData;
+	pChat->m_Mode = MODE_ALL;
+	pChat->SendChatQueued(pResult->GetString(0));
+	pChat->m_Mode = MODE_NONE;
 }
 
 void CChat::AddHistoryEntry(const char *pLine)

@@ -1,18 +1,6 @@
 /* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
-#include <engine/shared/config.h>
-
-#include <engine/shared/protocolglue.h>
-
-#include <generated/protocol.h>
-
-#include <game/mapitems.h>
-#include <game/server/score.h>
-#include <game/teamscore.h>
-
-#include "gamecontext.h"
 #include "gamecontroller.h"
-#include "player.h"
 
 #include "entities/character.h"
 #include "entities/door.h"
@@ -21,6 +9,17 @@
 #include "entities/light.h"
 #include "entities/pickup.h"
 #include "entities/projectile.h"
+#include "gamecontext.h"
+#include "player.h"
+
+#include <engine/shared/config.h>
+#include <engine/shared/protocolglue.h>
+
+#include <generated/protocol.h>
+
+#include <game/mapitems.h>
+#include <game/server/score.h>
+#include <game/teamscore.h>
 
 IGameController::IGameController(class CGameContext *pGameServer) :
 	m_Teams(pGameServer), m_pLoadBestTimeResult(nullptr)
@@ -39,7 +38,7 @@ IGameController::IGameController(class CGameContext *pGameServer) :
 	m_GameFlags = 0;
 	m_aMapWish[0] = 0;
 
-	m_CurrentRecord = 0;
+	m_CurrentRecord.reset();
 }
 
 IGameController::~IGameController() = default;
@@ -655,7 +654,7 @@ void IGameController::Snap(int SnappingClient)
 		if(!pRaceData)
 			return;
 
-		pRaceData->m_BestTime = round_to_int(m_CurrentRecord * 1000);
+		pRaceData->m_BestTime = m_CurrentRecord.has_value() ? round_to_int(m_CurrentRecord.value() * 1000) : -1;
 		pRaceData->m_Precision = 2;
 		pRaceData->m_RaceFlags = protocol7::RACEFLAG_KEEP_WANTED_WEAPON;
 	}

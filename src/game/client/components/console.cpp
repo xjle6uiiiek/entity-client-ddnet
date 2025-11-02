@@ -1,12 +1,12 @@
 /* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
 
+#include "console.h"
+
 #include <base/lock.h>
 #include <base/logger.h>
 #include <base/math.h>
 #include <base/system.h>
-
-#include <generated/client_data.h>
 
 #include <engine/console.h>
 #include <engine/engine.h>
@@ -17,15 +17,14 @@
 #include <engine/storage.h>
 #include <engine/textrender.h>
 
-#include <game/localization.h>
-#include <game/version.h>
+#include <generated/client_data.h>
 
 #include <game/client/gameclient.h>
 #include <game/client/ui.h>
+#include <game/localization.h>
+#include <game/version.h>
 
 #include <iterator>
-
-#include "console.h"
 
 static constexpr float FONT_SIZE = 10.0f;
 static constexpr float LINE_SPACING = 1.0f;
@@ -1490,6 +1489,11 @@ void CGameConsole::OnRender()
 		// render version
 		str_copy(aBuf, "v" GAME_VERSION " on " CONF_PLATFORM_STRING " " CONF_ARCH_STRING);
 		TextRender()->Text(Screen.w - TextRender()->TextWidth(FONT_SIZE, aBuf) - 10.0f, FONT_SIZE / 2.f, FONT_SIZE, aBuf);
+		
+		//<E-Client
+		const char *pClientVersion = CLIENT_NAME " v" ECLIENT_VERSION;
+		TextRender()->Text(Screen.w - TextRender()->TextWidth(FONT_SIZE, pClientVersion) - 10.0f, FONT_SIZE * 1.55f, FONT_SIZE, pClientVersion);
+		// E-Client>
 	}
 }
 

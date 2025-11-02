@@ -1,11 +1,13 @@
 /* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
 #include "character.h"
+
 #include "laser.h"
 #include "pickup.h"
 #include "projectile.h"
 
 #include <antibot/antibot_data.h>
+
 #include <base/log.h>
 
 #include <engine/antibot.h>
@@ -15,13 +17,12 @@
 #include <generated/server_data.h>
 
 #include <game/mapitems.h>
-#include <game/team_state.h>
-
 #include <game/server/gamecontext.h>
 #include <game/server/gamecontroller.h>
 #include <game/server/player.h>
 #include <game/server/score.h>
 #include <game/server/teams.h>
+#include <game/team_state.h>
 
 MACRO_ALLOC_POOL_ID_IMPL(CCharacter, MAX_CLIENTS)
 
@@ -610,7 +611,9 @@ void CCharacter::FireWeapon()
 
 		m_Core.m_Ninja.m_ActivationDir = Direction;
 		m_Core.m_Ninja.m_CurrentMoveTime = g_pData->m_Weapons.m_Ninja.m_Movetime * Server()->TickSpeed() / 1000;
-		m_Core.m_Ninja.m_OldVelAmount = length(m_Core.m_Vel);
+
+		// clamp to prevent massive MoveBox calculation lag with SG bug
+		m_Core.m_Ninja.m_OldVelAmount = std::clamp(length(m_Core.m_Vel), 0.0f, 6000.0f);
 
 		GameServer()->CreateSound(m_Pos, SOUND_NINJA_FIRE, TeamMask()); // NOLINT(clang-analyzer-unix.Malloc)
 	}
@@ -1901,11 +1904,11 @@ void CCharacter::HandleTiles(int Index)
 	}
 	else if(Collision()->GetSwitchType(MapIndex) == TILE_ADD_TIME && !m_LastPenalty)
 	{
-		int min = Collision()->GetSwitchDelay(MapIndex);
-		int sec = Collision()->GetSwitchNumber(MapIndex);
+		const int Minutes = Collision()->GetSwitchDelay(MapIndex);
+		const int Seconds = Collision()->GetSwitchNumber(MapIndex);
 		int Team = Teams()->m_Core.Team(m_Core.m_Id);
 
-		m_StartTime -= (min * 60 + sec) * Server()->TickSpeed();
+		m_StartTime -= (Minutes * 60 + Seconds) * Server()->TickSpeed();
 
 		if((g_Config.m_SvTeam == SV_TEAM_FORCED_SOLO || (Team != TEAM_FLOCK && !Teams()->TeamFlock(Team))) && Team != TEAM_SUPER)
 		{
@@ -1925,11 +1928,11 @@ void CCharacter::HandleTiles(int Index)
 	}
 	else if(Collision()->GetSwitchType(MapIndex) == TILE_SUBTRACT_TIME && !m_LastBonus)
 	{
-		int min = Collision()->GetSwitchDelay(MapIndex);
-		int sec = Collision()->GetSwitchNumber(MapIndex);
+		const int Minutes = Collision()->GetSwitchDelay(MapIndex);
+		const int Seconds = Collision()->GetSwitchNumber(MapIndex);
 		int Team = Teams()->m_Core.Team(m_Core.m_Id);
 
-		m_StartTime += (min * 60 + sec) * Server()->TickSpeed();
+		m_StartTime += (Minutes * 60 + Seconds) * Server()->TickSpeed();
 		if(m_StartTime > Server()->Tick())
 			m_StartTime = Server()->Tick();
 
@@ -1975,13 +1978,13 @@ void CCharacter::HandleTiles(int Index)
 			ResetPickups();
 		return;
 	}
-	int evilz = Collision()->IsEvilTeleport(MapIndex);
-	if(evilz && !Collision()->TeleOuts(evilz - 1).empty())
+	const int EvilTeleport = Collision()->IsEvilTeleport(MapIndex);
+	if(EvilTeleport && !Collision()->TeleOuts(EvilTeleport - 1).empty())
 	{
 		if(m_Core.m_Super || m_Core.m_Invincible)
 			return;
-		int TeleOut = GameWorld()->m_Core.RandomOr0(Collision()->TeleOuts(evilz - 1).size());
-		m_Core.m_Pos = Collision()->TeleOuts(evilz - 1)[TeleOut];
+		int TeleOut = GameWorld()->m_Core.RandomOr0(Collision()->TeleOuts(EvilTeleport - 1).size());
+		m_Core.m_Pos = Collision()->TeleOuts(EvilTeleport - 1)[TeleOut];
 		if(!g_Config.m_SvOldTeleportHook && !g_Config.m_SvOldTeleportWeapons)
 		{
 			m_Core.m_Vel = vec2(0, 0);

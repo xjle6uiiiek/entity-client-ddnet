@@ -4,7 +4,9 @@
 #define ENGINE_CONSOLE_H
 
 #include "kernel.h"
+
 #include <base/color.h>
+
 #include <engine/storage.h>
 
 #include <memory>
@@ -34,6 +36,7 @@ public:
 
 		CMDLINE_LENGTH = 512,
 
+		CLIENT_ID_UNSPECIFIED = -1, // has full admin access on the server
 		CLIENT_ID_GAME = -2,
 		CLIENT_ID_NO_GAME = -3,
 
@@ -82,7 +85,6 @@ public:
 		virtual const char *Name() const = 0;
 		virtual const char *Help() const = 0;
 		virtual const char *Params() const = 0;
-		virtual const ICommandInfo *NextCommandInfo(EAccessLevel AccessLevel, int FlagMask) const = 0;
 		virtual EAccessLevel GetAccessLevel() const = 0;
 	};
 
@@ -97,6 +99,7 @@ public:
 
 	virtual void Init() = 0;
 	virtual const ICommandInfo *FirstCommandInfo(EAccessLevel AccessLevel, int FlagMask) const = 0;
+	virtual const ICommandInfo *NextCommandInfo(const IConsole::ICommandInfo *pInfo, EAccessLevel AccessLevel, int FlagMask) const = 0;
 	virtual const ICommandInfo *GetCommandInfo(const char *pName, int FlagMask, bool Temp) = 0;
 	virtual int PossibleCommands(const char *pStr, int FlagMask, bool Temp, FPossibleCallback pfnCallback = EmptyPossibleCommandCallback, void *pUser = nullptr) = 0;
 	virtual void ParseArguments(int NumArgs, const char **ppArguments) = 0;
@@ -109,10 +112,10 @@ public:
 	virtual void StoreCommands(bool Store) = 0;
 
 	virtual bool LineIsValid(const char *pStr) = 0;
-	virtual void ExecuteLine(const char *pStr, int ClientId = -1, bool InterpretSemicolons = true) = 0;
-	virtual void ExecuteLineFlag(const char *pStr, int FlasgMask, int ClientId = -1, bool InterpretSemicolons = true) = 0;
-	virtual void ExecuteLineStroked(int Stroke, const char *pStr, int ClientId = -1, bool InterpretSemicolons = true) = 0;
-	virtual bool ExecuteFile(const char *pFilename, int ClientId = -1, bool LogFailure = false, int StorageType = IStorage::TYPE_ALL) = 0;
+	virtual void ExecuteLine(const char *pStr, int ClientId = CLIENT_ID_UNSPECIFIED, bool InterpretSemicolons = true) = 0;
+	virtual void ExecuteLineFlag(const char *pStr, int FlasgMask, int ClientId = CLIENT_ID_UNSPECIFIED, bool InterpretSemicolons = true) = 0;
+	virtual void ExecuteLineStroked(int Stroke, const char *pStr, int ClientId = CLIENT_ID_UNSPECIFIED, bool InterpretSemicolons = true) = 0;
+	virtual bool ExecuteFile(const char *pFilename, int ClientId = CLIENT_ID_UNSPECIFIED, bool LogFailure = false, int StorageType = IStorage::TYPE_ALL) = 0;
 
 	/**
 	 * @deprecated Prefer using the `log_*` functions from base/log.h instead of this function for the following reasons:

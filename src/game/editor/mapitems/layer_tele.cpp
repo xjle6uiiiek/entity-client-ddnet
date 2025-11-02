@@ -78,16 +78,16 @@ bool CLayerTele::IsEmpty() const
 	return true;
 }
 
-void CLayerTele::BrushDraw(std::shared_ptr<CLayer> pBrush, vec2 WorldPos)
+void CLayerTele::BrushDraw(CLayer *pBrush, vec2 WorldPos)
 {
 	if(m_Readonly)
 		return;
 
-	std::shared_ptr<CLayerTele> pTeleLayer = std::static_pointer_cast<CLayerTele>(pBrush);
+	CLayerTele *pTeleLayer = static_cast<CLayerTele *>(pBrush);
 	int sx = ConvertX(WorldPos.x);
 	int sy = ConvertY(WorldPos.y);
-	if(str_comp(pTeleLayer->m_aFileName, m_pEditor->m_aFileName))
-		m_pEditor->m_TeleNumber = pTeleLayer->m_TeleNum;
+	if(str_comp(pTeleLayer->m_aFilename, m_pEditor->m_aFilename))
+		m_pEditor->m_TeleNumber = pTeleLayer->m_TeleNumber;
 
 	bool Destructive = m_pEditor->m_BrushDrawDestructive || pTeleLayer->IsEmpty();
 
@@ -225,7 +225,7 @@ void CLayerTele::BrushRotate(float Amount)
 	}
 }
 
-void CLayerTele::FillSelection(bool Empty, std::shared_ptr<CLayer> pBrush, CUIRect Rect)
+void CLayerTele::FillSelection(bool Empty, CLayer *pBrush, CUIRect Rect)
 {
 	if(m_Readonly || (!Empty && pBrush->m_Type != LAYERTYPE_TILES))
 		return;
@@ -237,7 +237,7 @@ void CLayerTele::FillSelection(bool Empty, std::shared_ptr<CLayer> pBrush, CUIRe
 	int w = ConvertX(Rect.w);
 	int h = ConvertY(Rect.h);
 
-	std::shared_ptr<CLayerTele> pLt = std::static_pointer_cast<CLayerTele>(pBrush);
+	CLayerTele *pLt = static_cast<CLayerTele *>(pBrush);
 
 	bool Destructive = m_pEditor->m_BrushDrawDestructive || Empty || pLt->IsEmpty();
 
@@ -285,9 +285,9 @@ void CLayerTele::FillSelection(bool Empty, std::shared_ptr<CLayer> pBrush, CUIRe
 						// as tiles with number 0 would be ignored by previous versions.
 						m_pTeleTile[TgtIndex].m_Number = 255;
 					}
-					else if(!IsCheckpoint && ((pLt->m_pTeleTile[SrcIndex].m_Number == 0 && m_pEditor->m_TeleNumber) || m_pEditor->m_TeleNumber != pLt->m_TeleNum))
+					else if(!IsCheckpoint && ((pLt->m_pTeleTile[SrcIndex].m_Number == 0 && m_pEditor->m_TeleNumber) || m_pEditor->m_TeleNumber != pLt->m_TeleNumber))
 						m_pTeleTile[TgtIndex].m_Number = m_pEditor->m_TeleNumber;
-					else if(IsCheckpoint && ((pLt->m_pTeleTile[SrcIndex].m_Number == 0 && m_pEditor->m_TeleCheckpointNumber) || m_pEditor->m_TeleCheckpointNumber != pLt->m_TeleCheckpointNum))
+					else if(IsCheckpoint && ((pLt->m_pTeleTile[SrcIndex].m_Number == 0 && m_pEditor->m_TeleCheckpointNumber) || m_pEditor->m_TeleCheckpointNumber != pLt->m_TeleCheckpointNumber))
 						m_pTeleTile[TgtIndex].m_Number = m_pEditor->m_TeleCheckpointNumber;
 					else
 						m_pTeleTile[TgtIndex].m_Number = pLt->m_pTeleTile[SrcIndex].m_Number;

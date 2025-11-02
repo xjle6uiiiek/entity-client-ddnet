@@ -1,6 +1,12 @@
 ﻿/* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
 
+#include "client.h"
+
+#include "demoedit.h"
+#include "friends.h"
+#include "serverbrowser.h"
+
 #include <base/hash.h>
 #include <base/hash_ctxt.h>
 #include <base/log.h>
@@ -8,13 +14,12 @@
 #include <base/math.h>
 #include <base/system.h>
 
-#include <engine/external/json-parser/json.h>
-
 #include <engine/config.h>
 #include <engine/console.h>
 #include <engine/discord.h>
 #include <engine/editor.h>
 #include <engine/engine.h>
+#include <engine/external/json-parser/json.h>
 #include <engine/favorites.h>
 #include <engine/graphics.h>
 #include <engine/input.h>
@@ -22,11 +27,6 @@
 #include <engine/map.h>
 #include <engine/notifications.h>
 #include <engine/serverbrowser.h>
-#include <engine/sound.h>
-#include <engine/steam.h>
-#include <engine/storage.h>
-#include <engine/textrender.h>
-
 #include <engine/shared/assertion_logger.h>
 #include <engine/shared/compression.h>
 #include <engine/shared/config.h>
@@ -44,6 +44,10 @@
 #include <engine/shared/rust_version.h>
 #include <engine/shared/snapshot.h>
 #include <engine/shared/uuid_manager.h>
+#include <engine/sound.h>
+#include <engine/steam.h>
+#include <engine/storage.h>
+#include <engine/textrender.h>
 
 #include <generated/protocol.h>
 #include <generated/protocol7.h>
@@ -51,11 +55,6 @@
 
 #include <game/localization.h>
 #include <game/version.h>
-
-#include "client.h"
-#include "demoedit.h"
-#include "friends.h"
-#include "serverbrowser.h"
 
 #if defined(CONF_VIDEORECORDER)
 #include "video.h"
@@ -524,7 +523,8 @@ void CClient::EnterGame(int Conn)
 	if(State() == IClient::STATE_DEMOPLAYBACK)
 		return;
 
-	m_aCodeRunAfterJoin[Conn] = false;
+	m_aDidPostConnect[Conn] = false;
+
 	m_aCodeRunAfterJoinConsole[Conn] = false;
 	m_aOnJoinInfo[CONN_MAIN] = false;
 
@@ -535,6 +535,73 @@ void CClient::EnterGame(int Conn)
 
 	ServerInfoRequest(); // fresh one for timeout protection
 	m_CurrentServerNextPingTime = time_get() + time_freq() / 2;
+}
+
+void CClient::OnPostConnect(int Conn, bool Dummy)
+{
+	if(!m_ServerCapabilities.m_ChatTimeoutCode)
+		return;
+
+	char aBuf[128];
+	char aBufMsg[256];
+	if(!g_Config.m_ClRunOnJoin[0] && !g_Config.m_ClDummyDefaultEyes && !g_Config.m_ClPlayerDefaultEyes)
+		str_format(aBufMsg, sizeof(aBufMsg), "/timeout %s", m_aTimeoutCodes[Conn]);
+	else
+		str_format(aBufMsg, sizeof(aBufMsg), "/mc;timeout %s", m_aTimeoutCodes[Conn]);
+
+	if(g_Config.m_ClDummyDefaultEyes || g_Config.m_ClPlayerDefaultEyes)
+	{
+		int Emote = ((g_Config.m_ClDummy) ? !Dummy : Dummy) ? g_Config.m_ClDummyDefaultEyes : g_Config.m_ClPlayerDefaultEyes;
+		char aBufEmote[128];
+		aBufEmote[0] = '\0';
+		switch(Emote)
+		{
+		case EMOTE_NORMAL:
+			break;
+		case EMOTE_PAIN:
+			str_format(aBufEmote, sizeof(aBufEmote), "emote pain %d", g_Config.m_ClEyeDuration);
+			break;
+		case EMOTE_HAPPY:
+			str_format(aBufEmote, sizeof(aBufEmote), "emote happy %d", g_Config.m_ClEyeDuration);
+			break;
+		case EMOTE_SURPRISE:
+			str_format(aBufEmote, sizeof(aBufEmote), "emote surprise %d", g_Config.m_ClEyeDuration);
+			break;
+		case EMOTE_ANGRY:
+			str_format(aBufEmote, sizeof(aBufEmote), "emote angry %d", g_Config.m_ClEyeDuration);
+			break;
+		case EMOTE_BLINK:
+			str_format(aBufEmote, sizeof(aBufEmote), "emote blink %d", g_Config.m_ClEyeDuration);
+			break;
+		}
+		if(aBufEmote[0])
+		{
+			str_format(aBuf, sizeof(aBuf), ";%s", aBufEmote);
+			str_append(aBufMsg, aBuf);
+		}
+	}
+	if(g_Config.m_ClRunOnJoin[0])
+	{
+		str_format(aBuf, sizeof(aBuf), ";%s", g_Config.m_ClRunOnJoin);
+		str_append(aBufMsg, aBuf);
+	}
+	if(IsSixup())
+	{
+		protocol7::CNetMsg_Cl_Say Msg7;
+		Msg7.m_Mode = protocol7::CHAT_ALL;
+		Msg7.m_Target = -1;
+		Msg7.m_pMessage = aBufMsg;
+		SendPackMsg(Conn, &Msg7, MSGFLAG_VITAL, true);
+	}
+	else
+	{
+		CNetMsg_Cl_Say MsgP;
+		MsgP.m_Team = 0;
+		MsgP.m_pMessage = aBufMsg;
+		CMsgPacker PackerTimeout(&MsgP);
+		MsgP.Pack(&PackerTimeout);
+		SendMsg(Conn, &PackerTimeout, MSGFLAG_VITAL);
+	}
 }
 
 static void GenerateTimeoutCode(char *pBuffer, unsigned Size, char *pSeed, const NETADDR *pAddrs, int NumAddrs, bool Dummy)
@@ -607,9 +674,9 @@ void CClient::Connect(const char *pAddress, const char *pPassword)
 	{
 		NETADDR NextAddr;
 		char aHost[128];
-		int url = net_addr_from_url(&NextAddr, aBuffer, aHost, sizeof(aHost));
+		const int UrlParseResult = net_addr_from_url(&NextAddr, aBuffer, aHost, sizeof(aHost));
 		bool Sixup = NextAddr.type & NETTYPE_TW7;
-		if(url > 0)
+		if(UrlParseResult > 0)
 			str_copy(aHost, aBuffer);
 
 		if(net_host_lookup(aHost, &NextAddr, m_aNetClient[CONN_MAIN].NetType()) != 0)
@@ -2190,6 +2257,12 @@ void CClient::ProcessServerPacket(CNetChunk *pPacket, int Conn, bool Dummy)
 						int64_t TimeLeft = (TickStart - Now) * 1000 / time_freq();
 						m_aGameTime[Conn].Update(&m_aGametimeMarginGraphs[Conn], (GameTick - 1) * time_freq() / GameTickSpeed(), TimeLeft, CSmoothTime::ADJUSTDIRECTION_DOWN);
 					}
+					if(m_aReceivedSnapshots[Conn] > GameTickSpeed() && !m_aDidPostConnect[Conn])
+					{
+						OnPostConnect(Conn, Dummy);
+						m_aDidPostConnect[Conn] = true;
+					}
+
 					if(g_Config.m_ClRunOnJoinConsole && m_aReceivedSnapshots[Conn] > g_Config.m_ClRunOnJoinDelay && !m_aCodeRunAfterJoinConsole[Conn])
 					{
 						m_pConsole->ExecuteLine(g_Config.m_ClRunOnJoin);
@@ -2203,73 +2276,6 @@ void CClient::ProcessServerPacket(CNetChunk *pPacket, int Conn, bool Dummy)
 							GameClient()->OnJoinInfo();
 							m_aOnJoinInfo[CONN_MAIN] = true;
 						}
-					}
-					if(m_aReceivedSnapshots[Conn] > GameTickSpeed() && !m_aCodeRunAfterJoin[Conn])
-					{
-						if(m_ServerCapabilities.m_ChatTimeoutCode)
-						{
-							char aBuf[128];
-							char aBufMsg[256];
-							if(!g_Config.m_ClRunOnJoin[0] && !g_Config.m_ClDummyDefaultEyes && !g_Config.m_ClPlayerDefaultEyes)
-								str_format(aBufMsg, sizeof(aBufMsg), "/timeout %s", m_aTimeoutCodes[Conn]);
-							else
-								str_format(aBufMsg, sizeof(aBufMsg), "/mc;timeout %s", m_aTimeoutCodes[Conn]);
-
-							if(g_Config.m_ClRunOnJoin[0])
-							{
-								str_format(aBuf, sizeof(aBuf), ";%s", g_Config.m_ClRunOnJoin);
-								str_append(aBufMsg, aBuf);
-							}
-							if(g_Config.m_ClDummyDefaultEyes || g_Config.m_ClPlayerDefaultEyes)
-							{
-								int Emote = ((g_Config.m_ClDummy) ? !Dummy : Dummy) ? g_Config.m_ClDummyDefaultEyes : g_Config.m_ClPlayerDefaultEyes;
-								char aBufEmote[128];
-								aBufEmote[0] = '\0';
-								switch(Emote)
-								{
-								case EMOTE_NORMAL:
-									break;
-								case EMOTE_PAIN:
-									str_format(aBufEmote, sizeof(aBufEmote), "emote pain %d", g_Config.m_ClEyeDuration);
-									break;
-								case EMOTE_HAPPY:
-									str_format(aBufEmote, sizeof(aBufEmote), "emote happy %d", g_Config.m_ClEyeDuration);
-									break;
-								case EMOTE_SURPRISE:
-									str_format(aBufEmote, sizeof(aBufEmote), "emote surprise %d", g_Config.m_ClEyeDuration);
-									break;
-								case EMOTE_ANGRY:
-									str_format(aBufEmote, sizeof(aBufEmote), "emote angry %d", g_Config.m_ClEyeDuration);
-									break;
-								case EMOTE_BLINK:
-									str_format(aBufEmote, sizeof(aBufEmote), "emote blink %d", g_Config.m_ClEyeDuration);
-									break;
-								}
-								if(aBufEmote[0])
-								{
-									str_format(aBuf, sizeof(aBuf), ";%s", aBufEmote);
-									str_append(aBufMsg, aBuf);
-								}
-							}
-							if(IsSixup())
-							{
-								protocol7::CNetMsg_Cl_Say Msg7;
-								Msg7.m_Mode = protocol7::CHAT_ALL;
-								Msg7.m_Target = -1;
-								Msg7.m_pMessage = aBufMsg;
-								SendPackMsg(Conn, &Msg7, MSGFLAG_VITAL, true);
-							}
-							else
-							{
-								CNetMsg_Cl_Say MsgP;
-								MsgP.m_Team = 0;
-								MsgP.m_pMessage = aBufMsg;
-								CMsgPacker PackerTimeout(&MsgP);
-								MsgP.Pack(&PackerTimeout);
-								SendMsg(Conn, &PackerTimeout, MSGFLAG_VITAL);
-							}
-						}
-						m_aCodeRunAfterJoin[Conn] = true;
 					}
 
 					// ack snapshot
@@ -4582,9 +4588,9 @@ void CClient::HandleConnectLink(const char *pLink)
 	else
 		str_copy(m_aCmdConnect, pLink);
 	// Edge appends / to the URL
-	const int len = str_length(m_aCmdConnect);
-	if(m_aCmdConnect[len - 1] == '/')
-		m_aCmdConnect[len - 1] = '\0';
+	const int Length = str_length(m_aCmdConnect);
+	if(m_aCmdConnect[Length - 1] == '/')
+		m_aCmdConnect[Length - 1] = '\0';
 }
 
 void CClient::HandleDemoPath(const char *pPath)

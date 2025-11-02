@@ -1,11 +1,9 @@
 ﻿/* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
-#include <base/log.h>
+#include "menus.h"
 
-#include <engine/engine.h>
 #include <engine/favorites.h>
 #include <engine/friends.h>
-#include <engine/gfx/image_manipulation.h>
 #include <engine/keys.h>
 #include <engine/serverbrowser.h>
 #include <engine/shared/config.h>
@@ -20,7 +18,6 @@
 #include <game/localization.h>
 
 #include <generated/client_data.h>
-#include "menus.h"
 
 constexpr float PLAYER_AFK_COLOR_ALPHA = 0.65f;
 
@@ -1177,9 +1174,9 @@ CUi::EPopupMenuFunctionResult CMenus::PopupCountrySelection(void *pContext, CUIR
 
 	for(size_t i = 0; i < pMenus->GameClient()->m_CountryFlags.Num(); ++i)
 	{
-		const CCountryFlags::CCountryFlag *pEntry = pMenus->GameClient()->m_CountryFlags.GetByIndex(i);
+		const CCountryFlags::CCountryFlag &Entry = pMenus->GameClient()->m_CountryFlags.GetByIndex(i);
 
-		const CListboxItem Item = s_ListBox.DoNextItem(pEntry, pEntry->m_CountryCode == pPopupContext->m_Selection);
+		const CListboxItem Item = s_ListBox.DoNextItem(&Entry, Entry.m_CountryCode == pPopupContext->m_Selection);
 		if(!Item.m_Visible)
 			continue;
 
@@ -1190,13 +1187,13 @@ CUi::EPopupMenuFunctionResult CMenus::PopupCountrySelection(void *pContext, CUIR
 		const float OldWidth = FlagRect.w;
 		FlagRect.w = FlagRect.h * 2.0f;
 		FlagRect.x += (OldWidth - FlagRect.w) / 2.0f;
-		pMenus->GameClient()->m_CountryFlags.Render(pEntry->m_CountryCode, ColorRGBA(1.0f, 1.0f, 1.0f, 1.0f), FlagRect.x, FlagRect.y, FlagRect.w, FlagRect.h);
+		pMenus->GameClient()->m_CountryFlags.Render(Entry.m_CountryCode, ColorRGBA(1.0f, 1.0f, 1.0f, 1.0f), FlagRect.x, FlagRect.y, FlagRect.w, FlagRect.h);
 
-		pMenus->Ui()->DoLabel(&Label, pEntry->m_aCountryCodeString, 10.0f, TEXTALIGN_MC);
+		pMenus->Ui()->DoLabel(&Label, Entry.m_aCountryCodeString, 10.0f, TEXTALIGN_MC);
 	}
 
 	const int NewSelected = s_ListBox.DoEnd();
-	pPopupContext->m_Selection = NewSelected >= 0 ? pMenus->GameClient()->m_CountryFlags.GetByIndex(NewSelected)->m_CountryCode : -1;
+	pPopupContext->m_Selection = NewSelected >= 0 ? pMenus->GameClient()->m_CountryFlags.GetByIndex(NewSelected).m_CountryCode : -1;
 	if(s_ListBox.WasItemSelected() || s_ListBox.WasItemActivated())
 	{
 		g_Config.m_BrFilterCountry = 1;

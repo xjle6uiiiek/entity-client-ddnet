@@ -4,28 +4,27 @@
 #define GAME_CLIENT_GAMECLIENT_H
 
 #include "render.h"
+
 #include <base/color.h>
 #include <base/vmath.h>
+
 #include <engine/client.h>
 #include <engine/client/enums.h>
 #include <engine/console.h>
 #include <engine/shared/config.h>
 #include <engine/shared/snapshot.h>
 
+#include <generated/protocol7.h>
+#include <generated/protocolglue.h>
+
+#include <game/client/prediction/gameworld.h>
+#include <game/client/race.h>
 #include <game/collision.h>
 #include <game/gamecore.h>
 #include <game/layers.h>
 #include <game/map/render_map.h>
 #include <game/mapbugs.h>
 #include <game/teamscore.h>
-
-#include <game/client/prediction/gameworld.h>
-#include <game/client/race.h>
-
-#include <generated/protocol7.h>
-#include <generated/protocolglue.h>
-
-#include <vector>
 
 // components
 #include "components/background.h"
@@ -47,6 +46,7 @@
 #include "components/hud.h"
 #include "components/infomessages.h"
 #include "components/items.h"
+#include "components/key_binder.h"
 #include "components/local_server.h"
 #include "components/mapimages.h"
 #include "components/maplayers.h"
@@ -161,6 +161,7 @@ public:
 	CBroadcast m_Broadcast;
 	CGameConsole m_GameConsole;
 	CBinds m_Binds;
+	CKeyBinder m_KeyBinder;
 	CParticles m_Particles;
 	CMenus m_Menus;
 	CSkins m_Skins;
@@ -378,6 +379,7 @@ public:
 		const CNetObj_GameData *m_pPrevGameDataObj;
 
 		const CNetObj_PlayerInfo *m_apPlayerInfos[MAX_CLIENTS];
+		const CNetObj_PlayerInfo *m_apPrevPlayerInfos[MAX_CLIENTS];
 		const CNetObj_PlayerInfo *m_apInfoByScore[MAX_CLIENTS];
 		const CNetObj_PlayerInfo *m_apInfoByName[MAX_CLIENTS];
 		const CNetObj_PlayerInfo *m_apInfoByDDTeamScore[MAX_CLIENTS];
@@ -1002,6 +1004,9 @@ private:
 	};
 
 	SMultiView m_MultiView;
+
+	void OnSaveCodeNetMessage(const CNetMsg_Sv_SaveCode *pMsg);
+	void StoreSave(const char *pTeamMembers, const char *pGeneratedCode) const;
 };
 
 ColorRGBA CalculateNameColor(ColorHSLA TextColorHSL);

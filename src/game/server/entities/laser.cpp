@@ -1,6 +1,7 @@
 /* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
 #include "laser.h"
+
 #include "character.h"
 
 #include <engine/shared/config.h>
@@ -239,9 +240,9 @@ void CLaser::DoBounce()
 			{
 				// Delay specifies which weapon the tile should work for.
 				// Delay = 0 means all.
-				int delay = GameServer()->Collision()->GetSwitchDelay(MapIndex);
+				const int Delay = GameServer()->Collision()->GetSwitchDelay(MapIndex);
 
-				if((delay != 3 && delay != 0) && m_Type == WEAPON_LASER)
+				if((Delay != 3 && Delay != 0) && m_Type == WEAPON_LASER)
 				{
 					IsSwitchTeleGun = IsBlueSwitchTeleGun = false;
 				}

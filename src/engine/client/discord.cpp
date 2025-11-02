@@ -1,4 +1,5 @@
 #include <base/system.h>
+
 #include <engine/client.h>
 #include <engine/discord.h>
 
@@ -29,6 +30,7 @@ class CDiscord : public IDiscord
 {
 	DiscordActivity m_Activity;
 	bool m_UpdateActivity = false;
+
 	IDiscordCore *m_pCore;
 	IDiscordActivityEvents m_ActivityEvents;
 	IDiscordActivityManager *m_pActivityManager;

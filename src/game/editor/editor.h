@@ -3,13 +3,28 @@
 #ifndef GAME_EDITOR_EDITOR_H
 #define GAME_EDITOR_EDITOR_H
 
+#include "editor_history.h"
+#include "editor_server_settings.h"
+#include "editor_trackers.h"
+#include "editor_ui.h"
+#include "font_typer.h"
+#include "layer_selector.h"
+#include "map_view.h"
+#include "quadart.h"
+#include "smooth_value.h"
+
 #include <base/bezier.h>
 #include <base/system.h>
 
+#include <engine/console.h>
+#include <engine/editor.h>
+#include <engine/engine.h>
+#include <engine/graphics.h>
+#include <engine/shared/datafile.h>
+#include <engine/shared/jobs.h>
+
 #include <game/client/ui.h>
 #include <game/client/ui_listbox.h>
-#include <game/mapitems.h>
-
 #include <game/editor/enums.h>
 #include <game/editor/file_browser.h>
 #include <game/editor/mapitems/envelope.h>
@@ -25,27 +40,10 @@
 #include <game/editor/mapitems/layer_tiles.h>
 #include <game/editor/mapitems/layer_tune.h>
 #include <game/editor/mapitems/map.h>
-
-#include <game/map/render_interfaces.h>
-
-#include <engine/console.h>
-#include <engine/editor.h>
-#include <engine/engine.h>
-#include <engine/graphics.h>
-#include <engine/shared/datafile.h>
-#include <engine/shared/jobs.h>
-
-#include "editor_history.h"
-#include "editor_server_settings.h"
-#include "editor_trackers.h"
-#include "editor_ui.h"
-#include "font_typer.h"
-#include "layer_selector.h"
-#include "map_view.h"
-#include "quadart.h"
-#include "smooth_value.h"
 #include <game/editor/prompt.h>
 #include <game/editor/quick_action.h>
+#include <game/map/render_interfaces.h>
+#include <game/mapitems.h>
 
 #include <deque>
 #include <functional>
@@ -218,8 +216,8 @@ public:
 
 		m_BrushColorEnabled = true;
 
-		m_aFileName[0] = '\0';
-		m_aFileNamePending[0] = '\0';
+		m_aFilename[0] = '\0';
+		m_aFilenamePending[0] = '\0';
 		m_ValidSaveFilename = false;
 
 		m_PopupEventActivated = false;
@@ -275,10 +273,10 @@ public:
 		m_TeleCheckpointNumber = 1;
 		m_ViewTeleNumber = 0;
 
-		m_TuningNum = 1;
+		m_TuningNumber = 1;
 		m_ViewTuning = 0;
 
-		m_SwitchNum = 1;
+		m_SwitchNumber = 1;
 		m_SwitchDelay = 0;
 		m_SpeedupForce = 50;
 		m_SpeedupMaxSpeed = 0;
@@ -334,6 +332,13 @@ public:
 		Horizontal,
 		Vertical
 	} m_MouseAxisLockState = EAxisLock::Start;
+
+	/**
+	 * Global time when the autosave was last updated in the @link HandleAutosave @endlink function.
+	 * This is used so that the autosave does not immediately activate when reopening the editor after
+	 * a longer time of inactivity, as autosaves are only updated while the editor is open.
+	 */
+	float m_LastAutosaveUpdateTime = -1.0f;
 	void HandleAutosave();
 	bool PerformAutosave();
 	void HandleWriterFinishJobs();
@@ -415,8 +420,8 @@ public:
 
 	bool m_BrushColorEnabled;
 
-	char m_aFileName[IO_MAX_PATH_LENGTH];
-	char m_aFileNamePending[IO_MAX_PATH_LENGTH];
+	char m_aFilename[IO_MAX_PATH_LENGTH];
+	char m_aFilenamePending[IO_MAX_PATH_LENGTH];
 	bool m_ValidSaveFilename;
 
 	enum
@@ -535,8 +540,6 @@ public:
 	std::vector<std::pair<int, int>> m_vSelectedEnvelopePoints;
 	int m_SelectedQuadEnvelope;
 	int m_CurrentQuadIndex;
-	int m_SelectedImage;
-	int m_SelectedSound;
 	int m_SelectedSource;
 	std::pair<int, int> m_SelectedTangentInPoint;
 	std::pair<int, int> m_SelectedTangentOutPoint;
@@ -654,15 +657,15 @@ public:
 	static CUi::EPopupMenuFunctionResult PopupEnvelopeCurvetype(void *pContext, CUIRect View, bool Active);
 	static CUi::EPopupMenuFunctionResult PopupQuadArt(void *pContext, CUIRect View, bool Active);
 
-	static bool CallbackOpenMap(const char *pFileName, int StorageType, void *pUser);
-	static bool CallbackAppendMap(const char *pFileName, int StorageType, void *pUser);
-	static bool CallbackSaveMap(const char *pFileName, int StorageType, void *pUser);
-	static bool CallbackSaveCopyMap(const char *pFileName, int StorageType, void *pUser);
+	static bool CallbackOpenMap(const char *pFilename, int StorageType, void *pUser);
+	static bool CallbackAppendMap(const char *pFilename, int StorageType, void *pUser);
+	static bool CallbackSaveMap(const char *pFilename, int StorageType, void *pUser);
+	static bool CallbackSaveCopyMap(const char *pFilename, int StorageType, void *pUser);
 	static bool CallbackAddTileart(const char *pFilepath, int StorageType, void *pUser);
 	static bool CallbackAddQuadArt(const char *pFilepath, int StorageType, void *pUser);
-	static bool CallbackSaveImage(const char *pFileName, int StorageType, void *pUser);
-	static bool CallbackSaveSound(const char *pFileName, int StorageType, void *pUser);
-	static bool CallbackCustomEntities(const char *pFileName, int StorageType, void *pUser);
+	static bool CallbackSaveImage(const char *pFilename, int StorageType, void *pUser);
+	static bool CallbackSaveSound(const char *pFilename, int StorageType, void *pUser);
+	static bool CallbackCustomEntities(const char *pFilename, int StorageType, void *pUser);
 
 	void PopupSelectImageInvoke(int Current, float x, float y);
 	int PopupSelectImageResult();
@@ -748,11 +751,10 @@ public:
 
 	bool ReplaceImage(const char *pFilename, int StorageType, bool CheckDuplicate);
 	static bool ReplaceImageCallback(const char *pFilename, int StorageType, void *pUser);
-	bool ReplaceSound(const char *pFileName, int StorageType, bool CheckDuplicate);
-	static bool ReplaceSoundCallback(const char *pFileName, int StorageType, void *pUser);
+	bool ReplaceSound(const char *pFilename, int StorageType, bool CheckDuplicate);
+	static bool ReplaceSoundCallback(const char *pFilename, int StorageType, void *pUser);
 	static bool AddImage(const char *pFilename, int StorageType, void *pUser);
-	static bool AddSound(const char *pFileName, int StorageType, void *pUser);
-	static bool IsAssetUsed(CFileBrowser::EFileType FileType, int Index, void *pUser);
+	static bool AddSound(const char *pFilename, int StorageType, void *pUser);
 
 	bool IsEnvelopeUsed(int EnvelopeIndex) const;
 	void RemoveUnusedEnvelopes();
@@ -761,7 +763,7 @@ public:
 
 	void RenderLayers(CUIRect LayersBox);
 	void RenderImagesList(CUIRect Toolbox);
-	void RenderSelectedImage(CUIRect View);
+	void RenderSelectedImage(CUIRect View) const;
 	void RenderSounds(CUIRect Toolbox);
 	void RenderModebar(CUIRect View);
 	void RenderStatusbar(CUIRect View, CUIRect *pTooltipRect);
@@ -790,7 +792,6 @@ public:
 	void RenderMenubar(CUIRect Menubar);
 
 	void SelectGameLayer();
-	std::vector<int> SortImages();
 
 	void DoAudioPreview(CUIRect View, const void *pPlayPauseButtonId, const void *pStopButtonId, const void *pSeekBarId, int SampleId);
 
@@ -822,14 +823,14 @@ public:
 	unsigned char m_TeleCheckpointNumber;
 	unsigned char m_ViewTeleNumber;
 
-	unsigned char m_TuningNum;
+	unsigned char m_TuningNumber;
 	unsigned char m_ViewTuning;
 
 	unsigned char m_SpeedupForce;
 	unsigned char m_SpeedupMaxSpeed;
 	short m_SpeedupAngle;
 
-	unsigned char m_SwitchNum;
+	unsigned char m_SwitchNumber;
 	unsigned char m_SwitchDelay;
 	unsigned char m_ViewSwitch;
 
@@ -850,8 +851,8 @@ private:
 
 // make sure to inline this function
 inline const class IGraphics *CLayer::Graphics() const { return m_pEditor->Graphics(); }
-inline class IGraphics *CLayer::Graphics() { return m_pEditor->Graphics(); }
+inline class IGraphics *CLayer::Graphics() { return m_pEditor->Graphics(); } // NOLINT(readability-make-member-function-const)
 inline const class ITextRender *CLayer::TextRender() const { return m_pEditor->TextRender(); }
-inline class ITextRender *CLayer::TextRender() { return m_pEditor->TextRender(); }
+inline class ITextRender *CLayer::TextRender() { return m_pEditor->TextRender(); } // NOLINT(readability-make-member-function-const)
 
 #endif

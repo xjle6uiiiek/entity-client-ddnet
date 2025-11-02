@@ -2,13 +2,19 @@
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
 #include "gamecontext.h"
 
-#include <vector>
-
+#include "entities/character.h"
+#include "gamemodes/DDRace.h"
+#include "gamemodes/mod.h"
+#include "player.h"
+#include "score.h"
 #include "teeinfo.h"
+
 #include <antibot/antibot_data.h>
+
 #include <base/logger.h>
 #include <base/math.h>
 #include <base/system.h>
+
 #include <engine/console.h>
 #include <engine/engine.h>
 #include <engine/map.h>
@@ -21,19 +27,16 @@
 #include <engine/shared/protocolglue.h>
 #include <engine/storage.h>
 
+#include <generated/protocol.h>
+#include <generated/protocol7.h>
+#include <generated/protocolglue.h>
+
 #include <game/collision.h>
 #include <game/gamecore.h>
 #include <game/mapitems.h>
 #include <game/version.h>
 
-#include <generated/protocol7.h>
-#include <generated/protocolglue.h>
-
-#include "entities/character.h"
-#include "gamemodes/DDRace.h"
-#include "gamemodes/mod.h"
-#include "player.h"
-#include "score.h"
+#include <vector>
 
 // Not thread-safe!
 class CClientChatLogger : public ILogger
@@ -1555,7 +1558,7 @@ void CGameContext::OnClientEnter(int ClientId)
 		Server()->SendPackMsg(&Msg, MSGFLAG_VITAL | MSGFLAG_NORECORD, ClientId);
 	}
 	for(const IConsole::ICommandInfo *pCmd = Console()->FirstCommandInfo(IConsole::EAccessLevel::USER, CFGFLAG_CHAT);
-		pCmd; pCmd = pCmd->NextCommandInfo(IConsole::EAccessLevel::USER, CFGFLAG_CHAT))
+		pCmd; pCmd = Console()->NextCommandInfo(pCmd, IConsole::EAccessLevel::USER, CFGFLAG_CHAT))
 	{
 		const char *pName = pCmd->Name();
 
@@ -1871,6 +1874,14 @@ void CGameContext::TeehistorianRecordTeamFinish(int TeamId, int TimeTicks)
 	if(m_TeeHistorianActive)
 	{
 		m_TeeHistorian.RecordTeamFinish(TeamId, TimeTicks);
+	}
+}
+
+void CGameContext::TeehistorianRecordAuthLogin(int ClientId, int Level, const char *pAuthName)
+{
+	if(m_TeeHistorianActive)
+	{
+		m_TeeHistorian.RecordAuthLogin(ClientId, Level, pAuthName);
 	}
 }
 
@@ -2295,7 +2306,6 @@ void CGameContext::OnCallVoteNetMessage(const CNetMsg_Cl_CallVote *pMsg, int Cli
 	{
 		str_copy(aReason, pMsg->m_pReason, sizeof(aReason));
 	}
-	int Authed = Server()->GetAuthedState(ClientId);
 
 	if(str_comp_nocase(pMsg->m_pType, "option") == 0)
 	{
@@ -2318,10 +2328,23 @@ void CGameContext::OnCallVoteNetMessage(const CNetMsg_Cl_CallVote *pMsg, int Cli
 					pOption->m_aDescription, aReason);
 				str_copy(aDesc, pOption->m_aDescription);
 
-				if((str_endswith(pOption->m_aCommand, "random_map") || str_endswith(pOption->m_aCommand, "random_unfinished_map")) && str_length(aReason) == 1 && aReason[0] >= '0' && aReason[0] <= '5')
+				if((str_endswith(pOption->m_aCommand, "random_map") || str_endswith(pOption->m_aCommand, "random_unfinished_map")))
 				{
-					int Stars = aReason[0] - '0';
-					str_format(aCmd, sizeof(aCmd), "%s %d", pOption->m_aCommand, Stars);
+					if(str_length(aReason) == 1 && aReason[0] >= '0' && aReason[0] <= '5')
+					{
+						int Stars = aReason[0] - '0';
+						str_format(aCmd, sizeof(aCmd), "%s %d", pOption->m_aCommand, Stars);
+					}
+					else if(str_length(aReason) == 3 && aReason[1] == '-' && aReason[0] >= '0' && aReason[0] <= '5' && aReason[2] >= '0' && aReason[2] <= '5')
+					{
+						int Start = aReason[0] - '0';
+						int End = aReason[2] - '0';
+						str_format(aCmd, sizeof(aCmd), "%s %d %d", pOption->m_aCommand, Start, End);
+					}
+					else
+					{
+						str_copy(aCmd, pOption->m_aCommand);
+					}
 				}
 				else
 				{
@@ -2337,7 +2360,7 @@ void CGameContext::OnCallVoteNetMessage(const CNetMsg_Cl_CallVote *pMsg, int Cli
 
 		if(!pOption)
 		{
-			if(Authed != AUTHED_ADMIN) // allow admins to call any vote they want
+			if(!Server()->IsRconAuthedAdmin(ClientId)) // allow admins to call any vote they want
 			{
 				str_format(aChatmsg, sizeof(aChatmsg), "'%s' isn't an option on this server", pMsg->m_pValue);
 				SendChatTarget(ClientId, aChatmsg);
@@ -2355,16 +2378,16 @@ void CGameContext::OnCallVoteNetMessage(const CNetMsg_Cl_CallVote *pMsg, int Cli
 	}
 	else if(str_comp_nocase(pMsg->m_pType, "kick") == 0)
 	{
-		if(!g_Config.m_SvVoteKick && !Authed) // allow admins to call kick votes even if they are forbidden
+		if(!g_Config.m_SvVoteKick && !Server()->IsRconAuthed(ClientId)) // allow admins to call kick votes even if they are forbidden
 		{
 			SendChatTarget(ClientId, "Server does not allow voting to kick players");
 			return;
 		}
-		if(!Authed && time_get() < m_apPlayers[ClientId]->m_Last_KickVote + (time_freq() * g_Config.m_SvVoteKickDelay))
+		if(!Server()->IsRconAuthed(ClientId) && time_get() < m_apPlayers[ClientId]->m_LastKickVote + (time_freq() * g_Config.m_SvVoteKickDelay))
 		{
 			str_format(aChatmsg, sizeof(aChatmsg), "There's a %d second wait time between kick votes for each player please wait %d second(s)",
 				g_Config.m_SvVoteKickDelay,
-				(int)((m_apPlayers[ClientId]->m_Last_KickVote + g_Config.m_SvVoteKickDelay * time_freq() - time_get()) / time_freq()));
+				(int)((m_apPlayers[ClientId]->m_LastKickVote + g_Config.m_SvVoteKickDelay * time_freq() - time_get()) / time_freq()));
 			SendChatTarget(ClientId, aChatmsg);
 			return;
 		}
@@ -2423,6 +2446,7 @@ void CGameContext::OnCallVoteNetMessage(const CNetMsg_Cl_CallVote *pMsg, int Cli
 		{
 			return;
 		}
+		int Authed = Server()->GetAuthedState(ClientId);
 		int KickedAuthed = Server()->GetAuthedState(KickId);
 		if(KickedAuthed > Authed)
 		{
@@ -2460,7 +2484,7 @@ void CGameContext::OnCallVoteNetMessage(const CNetMsg_Cl_CallVote *pMsg, int Cli
 			str_format(aCmd, sizeof(aCmd), "uninvite %d %d; set_team_ddr %d 0", KickId, GetDDRaceTeam(KickId), KickId);
 			str_format(aDesc, sizeof(aDesc), "Move '%s' to team 0", Server()->ClientName(KickId));
 		}
-		m_apPlayers[ClientId]->m_Last_KickVote = time_get();
+		m_apPlayers[ClientId]->m_LastKickVote = time_get();
 		m_VoteType = VOTE_TYPE_KICK;
 		m_VoteVictim = KickId;
 	}
@@ -2484,6 +2508,7 @@ void CGameContext::OnCallVoteNetMessage(const CNetMsg_Cl_CallVote *pMsg, int Cli
 			SendChatTarget(ClientId, "You can't move yourself to spectators");
 			return;
 		}
+		int Authed = Server()->GetAuthedState(ClientId);
 		int SpectateAuthed = Server()->GetAuthedState(SpectateId);
 		if(SpectateAuthed > Authed)
 		{
@@ -3185,8 +3210,13 @@ void CGameContext::ConRandomMap(IConsole::IResult *pResult, void *pUserData)
 	CGameContext *pSelf = (CGameContext *)pUserData;
 
 	const int ClientId = pResult->m_ClientId == -1 ? pSelf->m_VoteCreator : pResult->m_ClientId;
-	const int Stars = pResult->NumArguments() ? pResult->GetInteger(0) : -1;
-	pSelf->m_pScore->RandomMap(ClientId, Stars);
+	int MinStars = pResult->NumArguments() > 0 ? pResult->GetInteger(0) : -1;
+	int MaxStars = pResult->NumArguments() > 1 ? pResult->GetInteger(1) : MinStars;
+
+	if(!in_range(MinStars, -1, 5) || !in_range(MaxStars, -1, 5))
+		return;
+
+	pSelf->m_pScore->RandomMap(ClientId, MinStars, MaxStars);
 }
 
 void CGameContext::ConRandomUnfinishedMap(IConsole::IResult *pResult, void *pUserData)
@@ -3194,8 +3224,13 @@ void CGameContext::ConRandomUnfinishedMap(IConsole::IResult *pResult, void *pUse
 	CGameContext *pSelf = (CGameContext *)pUserData;
 
 	const int ClientId = pResult->m_ClientId == -1 ? pSelf->m_VoteCreator : pResult->m_ClientId;
-	const int Stars = pResult->NumArguments() ? pResult->GetInteger(0) : -1;
-	pSelf->m_pScore->RandomUnfinishedMap(ClientId, Stars);
+	int MinStars = pResult->NumArguments() > 0 ? pResult->GetInteger(0) : -1;
+	int MaxStars = pResult->NumArguments() > 1 ? pResult->GetInteger(1) : MinStars;
+
+	if(!in_range(MinStars, -1, 5) || !in_range(MaxStars, -1, 5))
+		return;
+
+	pSelf->m_pScore->RandomUnfinishedMap(ClientId, MinStars, MaxStars);
 }
 
 void CGameContext::ConRestart(IConsole::IResult *pResult, void *pUserData)
@@ -3726,8 +3761,8 @@ void CGameContext::OnConsoleInit()
 	Console()->Register("switch_open", "i[switch]", CFGFLAG_SERVER | CFGFLAG_GAME, ConSwitchOpen, this, "Whether a switch is deactivated by default (otherwise activated)");
 	Console()->Register("pause_game", "", CFGFLAG_SERVER, ConPause, this, "Pause/unpause game");
 	Console()->Register("change_map", "r[map]", CFGFLAG_SERVER | CFGFLAG_STORE, ConChangeMap, this, "Change map");
-	Console()->Register("random_map", "?i[stars]", CFGFLAG_SERVER | CFGFLAG_STORE, ConRandomMap, this, "Random map");
-	Console()->Register("random_unfinished_map", "?i[stars]", CFGFLAG_SERVER | CFGFLAG_STORE, ConRandomUnfinishedMap, this, "Random unfinished map");
+	Console()->Register("random_map", "?i[stars] ?i[max stars]", CFGFLAG_SERVER | CFGFLAG_STORE, ConRandomMap, this, "Random map");
+	Console()->Register("random_unfinished_map", "?i[stars] ?i[max stars]", CFGFLAG_SERVER | CFGFLAG_STORE, ConRandomUnfinishedMap, this, "Random unfinished map");
 	Console()->Register("restart", "?i[seconds]", CFGFLAG_SERVER | CFGFLAG_STORE, ConRestart, this, "Restart in x seconds (0 = abort)");
 	Console()->Register("broadcast", "r[message]", CFGFLAG_SERVER, ConBroadcast, this, "Broadcast message");
 	Console()->Register("say", "r[message]", CFGFLAG_SERVER, ConSay, this, "Say in chat");
@@ -4021,7 +4056,7 @@ void CGameContext::OnInit(const void *pPersistentData)
 
 	m_pConfigManager->SetGameSettingsReadOnly(false);
 
-	Console()->ExecuteFile(g_Config.m_SvResetFile, -1);
+	Console()->ExecuteFile(g_Config.m_SvResetFile, IConsole::CLIENT_ID_UNSPECIFIED);
 
 	LoadMapSettings();
 
@@ -4113,20 +4148,6 @@ void CGameContext::OnInit(const void *pPersistentData)
 		}
 
 		m_TeeHistorian.Reset(&GameInfo, TeeHistorianWrite, this);
-
-		for(int i = 0; i < MAX_CLIENTS; i++)
-		{
-			if(Server()->ClientSlotEmpty(i))
-			{
-				continue;
-			}
-			const int Level = Server()->GetAuthedState(i);
-			if(Level == AUTHED_NO)
-			{
-				continue;
-			}
-			m_TeeHistorian.RecordAuthInitial(i, Level, Server()->GetAuthName(i));
-		}
 	}
 
 	Server()->DemoRecorder_HandleAutoStart();
@@ -4475,7 +4496,7 @@ void CGameContext::OnSnap(int ClientId, bool GlobalSnap)
 		int *pParams = (int *)&m_Tuning;
 		for(unsigned i = 0; i < sizeof(m_Tuning) / sizeof(int); i++)
 			Msg.AddInt(pParams[i]);
-		Server()->SendMsg(&Msg, MSGFLAG_RECORD | MSGFLAG_NOSEND, ClientId);
+		Server()->SendMsg(&Msg, MSGFLAG_NOSEND, ClientId);
 	}
 
 	m_pController->Snap(ClientId);
@@ -4633,8 +4654,8 @@ void CGameContext::SendRecord(int ClientId)
 {
 	CNetMsg_Sv_Record Msg;
 	CNetMsg_Sv_RecordLegacy MsgLegacy;
-	MsgLegacy.m_PlayerTimeBest = Msg.m_PlayerTimeBest = Score()->PlayerData(ClientId)->m_BestTime * 100.0f;
-	MsgLegacy.m_ServerTimeBest = Msg.m_ServerTimeBest = m_pController->m_CurrentRecord * 100.0f; // TODO: finish this
+	MsgLegacy.m_PlayerTimeBest = Msg.m_PlayerTimeBest = round_to_int(Score()->PlayerData(ClientId)->m_BestTime * 100.0f);
+	MsgLegacy.m_ServerTimeBest = Msg.m_ServerTimeBest = m_pController->m_CurrentRecord.has_value() ? round_to_int(m_pController->m_CurrentRecord.value() * 100.0f) : 0; //TODO: finish this
 	Server()->SendPackMsg(&Msg, MSGFLAG_VITAL, ClientId);
 	if(!Server()->IsSixup(ClientId) && GetClientVersion(ClientId) < VERSION_DDNET_MSG_LEGACY)
 	{
@@ -4684,6 +4705,113 @@ void CGameContext::SendFinish(int ClientId, float Time, float PreviousBestTime)
 	RaceFinishMsg.m_RecordPersonal = (Time < PreviousBestTime || !PreviousBestTime);
 	RaceFinishMsg.m_RecordServer = Time < m_pController->m_CurrentRecord;
 	Server()->SendPackMsg(&RaceFinishMsg, MSGFLAG_VITAL | MSGFLAG_NORECORD, -1);
+}
+
+void CGameContext::SendSaveCode(int Team, int TeamSize, int State, const char *pError, const char *pSaveRequester, const char *pServerName, const char *pGeneratedCode, const char *pCode)
+{
+	char aBuf[512];
+
+	CMsgPacker Msg(NETMSGTYPE_SV_SAVECODE);
+	Msg.AddInt(State);
+	Msg.AddString(pError);
+	Msg.AddString(pSaveRequester);
+	Msg.AddString(pServerName);
+	Msg.AddString(pGeneratedCode);
+	Msg.AddString(pCode);
+	char aTeamMembers[1024];
+	aTeamMembers[0] = '\0';
+	int NumMembersSent = 0;
+	for(int MemberId = 0; MemberId < MAX_CLIENTS; MemberId++)
+	{
+		if(!m_apPlayers[MemberId])
+			continue;
+		if(GetDDRaceTeam(MemberId) != Team)
+			continue;
+		if(NumMembersSent++ > 10)
+		{
+			str_format(aBuf, sizeof(aBuf), " and %d others", (TeamSize - NumMembersSent) + 1);
+			str_append(aTeamMembers, aBuf);
+			break;
+		}
+
+		if(NumMembersSent > 1)
+			str_append(aTeamMembers, ", ");
+		str_append(aTeamMembers, Server()->ClientName(MemberId));
+	}
+	Msg.AddString(aTeamMembers);
+
+	for(int MemberId = 0; MemberId < MAX_CLIENTS; MemberId++)
+	{
+		if(!m_apPlayers[MemberId])
+			continue;
+		if(GetDDRaceTeam(MemberId) != Team)
+			continue;
+
+		if(GetClientVersion(MemberId) >= VERSION_DDNET_SAVE_CODE)
+		{
+			Server()->SendMsg(&Msg, MSGFLAG_VITAL, MemberId);
+		}
+		else
+		{
+			switch(State)
+			{
+			case SAVESTATE_PENDING:
+				if(pCode[0] == '\0')
+				{
+					str_format(aBuf,
+						sizeof(aBuf),
+						"Team save in progress. You'll be able to load with '/load %s'",
+						pGeneratedCode);
+				}
+				else
+				{
+					str_format(aBuf,
+						sizeof(aBuf),
+						"Team save in progress. You'll be able to load with '/load %s' if save is successful or with '/load %s' if it fails",
+						pCode,
+						pGeneratedCode);
+				}
+				break;
+			case SAVESTATE_DONE:
+				if(str_comp(pServerName, g_Config.m_SvSqlServerName) == 0)
+				{
+					str_format(aBuf, sizeof(aBuf),
+						"Team successfully saved by %s. Use '/load %s' to continue",
+						pSaveRequester, pCode[0] ? pCode : pGeneratedCode);
+				}
+				else
+				{
+					str_format(aBuf, sizeof(aBuf),
+						"Team successfully saved by %s. Use '/load %s' on %s to continue",
+						pSaveRequester, pCode[0] ? pCode : pGeneratedCode, pServerName);
+				}
+				break;
+			case SAVESTATE_FALLBACKFILE:
+				SendBroadcast("Database connection failed, teamsave written to a file instead. On official DDNet servers this will automatically be inserted into the database every full hour.", MemberId);
+				if(str_comp(pServerName, g_Config.m_SvSqlServerName) == 0)
+				{
+					str_format(aBuf, sizeof(aBuf),
+						"Team successfully saved by %s. The database connection failed, using generated save code instead to avoid collisions. Use '/load %s' to continue",
+						pSaveRequester, pCode[0] ? pCode : pGeneratedCode);
+				}
+				else
+				{
+					str_format(aBuf, sizeof(aBuf),
+						"Team successfully saved by %s. The database connection failed, using generated save code instead to avoid collisions. Use '/load %s' on %s to continue",
+						pSaveRequester, pCode[0] ? pCode : pGeneratedCode, pServerName);
+				}
+				break;
+			case SAVESTATE_ERROR:
+			case SAVESTATE_WARNING:
+				str_copy(aBuf, pError);
+				break;
+			default:
+				dbg_assert(false, "Unexpected save state %d", State);
+				break;
+			}
+			SendChatTarget(MemberId, aBuf);
+		}
+	}
 }
 
 bool CGameContext::ProcessSpamProtection(int ClientId, bool RespectChatInitialDelay)

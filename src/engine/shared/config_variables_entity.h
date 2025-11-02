@@ -372,22 +372,11 @@ MACRO_CONFIG_INT(ClWarlistServerBrowser, ec_warlist_server_browser, 1, 0, 1, CFG
 
 //MACRO_CONFIG_INT(ClChatBubblePushOut, ec_chat_bubble_push_out, 0, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Experimental setting to push bubbles away from eachother")
 
-// You can use these if you get my server from https://github.com/FoxNetw/FoxNet-DDNet
+// You can use these if you get my server from https://github.com/FoxNet-DDNet/FoxNet
 
-MACRO_CONFIG_INT(SvAutoHammer, fs_auto_hammer, 1, 0, 1, CFGFLAG_SERVER | CFGFLAG_GAME, "auto enables guns")
-MACRO_CONFIG_INT(SvAutoGun, fs_auto_gun, 1, 0, 1, CFGFLAG_SERVER | CFGFLAG_GAME, "auto enables guns")
-MACRO_CONFIG_INT(SvAutoGrenade, fs_auto_grenade, 0, 0, 1, CFGFLAG_SERVER | CFGFLAG_GAME, "auto enables guns")
-MACRO_CONFIG_INT(SvAutoLaser, fs_auto_laser, 0, 0, 1, CFGFLAG_SERVER | CFGFLAG_GAME, "auto enables guns")
-MACRO_CONFIG_INT(SvAutoShotgun, fs_auto_shotgun, 0, 0, 1, CFGFLAG_SERVER | CFGFLAG_GAME, "auto enables guns")
-MACRO_CONFIG_INT(SvAutoExplGun, fs_auto_explgun, 0, 0, 1, CFGFLAG_SERVER | CFGFLAG_GAME, "auto enables guns")
-MACRO_CONFIG_INT(SvAutoFreezeGun, fs_auto_freezegun, 0, 0, 1, CFGFLAG_SERVER | CFGFLAG_GAME, "auto enables guns")
-
-MACRO_CONFIG_INT(SvExplGun, fs_explgun, 0, 0, 1, CFGFLAG_SERVER | CFGFLAG_GAME, "enables the \"better version\" of the explosion gun")
-
-MACRO_CONFIG_INT(SvFakeGrenade, fs_fake_grenade, 0, 0, 1, CFGFLAG_SERVER | CFGFLAG_GAME, "Grenade doesnt explode")
-MACRO_CONFIG_INT(SvDisableFreeze, fs_disable_freeze, 0, 0, 1, CFGFLAG_SERVER | CFGFLAG_GAME, "fake freeze?")
-
-MACRO_CONFIG_INT(SvFinishXPAmount, fs_finish_xp_amount, 0, 0, 5000, CFGFLAG_SERVER | CFGFLAG_GAME, "How much xp a players should get for a map finish (0 = disabled)")
+// Quads
+MACRO_CONFIG_INT(SvMovingTiles, sv_moving_tiles, 0, 0, 1, CFGFLAG_SERVER | CFGFLAG_GAME, "Whether to use moving tiles using quads or not")
+MACRO_CONFIG_INT(SvTeleGrenade, sv_tele_grenade, 0, 0, 1, CFGFLAG_SERVER | CFGFLAG_GAME, "Whether to use tele grenade")
 
 // Pro_Gaming1921 Extra
 MACRO_CONFIG_INT(ClChangeAllSkin, ac_change_all_skin, 1, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "change everyones Skin")

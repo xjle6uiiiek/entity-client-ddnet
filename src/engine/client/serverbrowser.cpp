@@ -5,15 +5,15 @@
 #include "serverbrowser_http.h"
 #include "serverbrowser_ping_cache.h"
 
-#include <algorithm>
-#include <map>
-#include <set>
-#include <vector>
-
 #include <base/hash_ctxt.h>
 #include <base/log.h>
 #include <base/system.h>
 
+#include <engine/console.h>
+#include <engine/engine.h>
+#include <engine/favorites.h>
+#include <engine/friends.h>
+#include <engine/http.h>
 #include <engine/shared/config.h>
 #include <engine/shared/json.h>
 #include <engine/shared/masterserver.h>
@@ -21,13 +21,12 @@
 #include <engine/shared/packer.h>
 #include <engine/shared/protocol.h>
 #include <engine/shared/serverinfo.h>
-
-#include <engine/console.h>
-#include <engine/engine.h>
-#include <engine/favorites.h>
-#include <engine/friends.h>
-#include <engine/http.h>
 #include <engine/storage.h>
+
+#include <algorithm>
+#include <map>
+#include <set>
+#include <vector>
 
 class CSortWrap
 {
@@ -746,16 +745,16 @@ void CServerBrowser::SetInfo(CServerEntry *pEntry, const CServerInfo &Info) cons
 		{
 		}
 
-		bool operator()(const CServerInfo::CClient &p0, const CServerInfo::CClient &p1) const
+		bool operator()(const CServerInfo::CClient &Client0, const CServerInfo::CClient &Client1) const
 		{
 			// Sort players before non players
-			if(p0.m_Player && !p1.m_Player)
+			if(Client0.m_Player && !Client1.m_Player)
 				return true;
-			if(!p0.m_Player && p1.m_Player)
+			if(!Client0.m_Player && Client1.m_Player)
 				return false;
 
-			int Score0 = p0.m_Score;
-			int Score1 = p1.m_Score;
+			int Score0 = Client0.m_Score;
+			int Score1 = Client1.m_Score;
 
 			if(m_ScoreKind == CServerInfo::CLIENT_SCORE_KIND_TIME || m_ScoreKind == CServerInfo::CLIENT_SCORE_KIND_TIME_BACKCOMPAT)
 			{
@@ -775,7 +774,7 @@ void CServerBrowser::SetInfo(CServerEntry *pEntry, const CServerInfo &Info) cons
 					return Score0 > Score1;
 			}
 
-			return str_comp_nocase(p0.m_aName, p1.m_aName) < 0;
+			return str_comp_nocase(Client0.m_aName, Client1.m_aName) < 0;
 		}
 	};
 

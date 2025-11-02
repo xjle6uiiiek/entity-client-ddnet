@@ -1202,7 +1202,7 @@ void CMenus::RenderSettingsQuickActions(CUIRect MainView)
 
 	Ui()->DoLabel(&KeyLabel, aBuf, 14.0f, TEXTALIGN_ML);
 	int OldId = Key.m_KeyId, OldModifierCombination = Key.m_ModifierCombination, NewModifierCombination;
-	int NewId = DoKeyReader((void *)&Key.m_pName, &Button, OldId, OldModifierCombination, &NewModifierCombination);
+	int NewId = GameClient()->m_KeyBinder.DoKeyReader((void *)&Key.m_pName, &Button, OldId, OldModifierCombination, &NewModifierCombination);
 	if(NewId != OldId || NewModifierCombination != OldModifierCombination)
 	{
 		if(OldId != 0 || NewId == 0)
@@ -1393,7 +1393,7 @@ void CMenus::RenderSettingsBindwheel(CUIRect MainView)
 
 	Ui()->DoLabel(&KeyLabel, aBuf, 14.0f, TEXTALIGN_ML);
 	int OldId = Key.m_KeyId, OldModifierCombination = Key.m_ModifierCombination, NewModifierCombination;
-	int NewId = DoKeyReader((void *)&Key.m_pName, &Button, OldId, OldModifierCombination, &NewModifierCombination);
+	int NewId = GameClient()->m_KeyBinder.DoKeyReader((void *)&Key.m_pName, &Button, OldId, OldModifierCombination, &NewModifierCombination);
 	if(NewId != OldId || NewModifierCombination != OldModifierCombination)
 	{
 		if(OldId != 0 || NewId == 0)
@@ -1704,16 +1704,17 @@ void CMenus::RenderSettingsWarList(CUIRect MainView)
 	static std::vector<unsigned char> s_vTypeItemIds;
 	static std::vector<CButtonContainer> s_vTypeDeleteButtons;
 	static std::vector<CButtonContainer> s_vTypeBrowserHideButtons;
+	static std::vector<std::string> s_vTypeEntriesText;
 
 	const int MaxTypes = GameClient()->m_WarList.m_WarTypes.size();
 	s_vTypeItemIds.resize(MaxTypes);
 	s_vTypeDeleteButtons.resize(MaxTypes);
 	s_vTypeBrowserHideButtons.resize(MaxTypes);
+	s_vTypeEntriesText.resize(MaxTypes);
 
 	for(int i = 0; i < (int)GameClient()->m_WarList.m_WarTypes.size(); i++)
 	{
 		CWarType *pType = GameClient()->m_WarList.m_WarTypes[i];
-
 		if(!pType)
 			continue;
 
@@ -1754,6 +1755,11 @@ void CMenus::RenderSettingsWarList(CUIRect MainView)
 		TextRender()->TextColor(pType->m_Color);
 		Ui()->DoLabel(&TypeRect, pType->m_aWarName, StandardFontSize, TEXTALIGN_ML);
 		TextRender()->TextColor(TextRender()->DefaultTextColor());
+
+		char aBuf[64];
+		str_format(aBuf, sizeof(aBuf), "%d %s", pType->m_NumEntries, Localize("entries"));
+		s_vTypeEntriesText[i] = aBuf;
+		GameClient()->m_Tooltips.DoToolTip(&s_vTypeItemIds[i], &TypeRect, s_vTypeEntriesText[i].c_str());
 	}
 	const int NewSelectedType = s_WarTypeListBox.DoEnd();
 	if((SelectedOldType != NewSelectedType && NewSelectedType >= 0) || (NewSelectedType >= 0 && Ui()->HotItem() == &s_vTypeItemIds[NewSelectedType] && Ui()->MouseButtonClicked(0)))
@@ -2087,7 +2093,7 @@ void CMenus::RenderSettingsProfiles(CUIRect MainView)
 			Actions.HSplitTop(5.0f, nullptr, &Actions);
 
 			static int s_AllowDelete;
-			DoButton_CheckBoxAutoVMarginAndSet(&s_AllowDelete, Localizable("Enable Deleting"), &s_AllowDelete, &Actions, LineSize);
+			DoButton_CheckBoxAutoVMarginAndSet(&s_AllowDelete, Localize("Enable Deleting"), &s_AllowDelete, &Actions, LineSize);
 			Actions.HSplitTop(5.0f, nullptr, &Actions);
 
 			if(s_AllowDelete)
@@ -2557,7 +2563,7 @@ void CMenus::RenderSettingsEClient(CUIRect MainView)
 					str_format(aBuf, sizeof(aBuf), "%s:", Localize(s_Key.m_pName));
 					Ui()->DoLabel(&KeyLabel, aBuf, 12.0f, TEXTALIGN_ML);
 					int OldId = s_Key.m_KeyId, OldModifierCombination = s_Key.m_ModifierCombination, NewModifierCombination;
-					int NewId = DoKeyReader(&s_Key, &KeyButton, OldId, OldModifierCombination, &NewModifierCombination);
+					int NewId = GameClient()->m_KeyBinder.DoKeyReader(&s_Key, &KeyButton, OldId, OldModifierCombination, &NewModifierCombination);
 					if(NewId != OldId || NewModifierCombination != OldModifierCombination)
 					{
 						if(OldId != 0 || NewId == 0)
@@ -2602,7 +2608,7 @@ void CMenus::RenderSettingsEClient(CUIRect MainView)
 				Ui()->DoLabel(&KeyLabel, Localize(pText), 14.0f, TEXTALIGN_ML);
 
 				int NewModifierCombination = 0;
-				int NewKey = DoKeyReader(&s_GoresModeKey, &KeyButton, s_GoresModeKey, 0, &NewModifierCombination);
+				int NewKey = GameClient()->m_KeyBinder.DoKeyReader(&s_GoresModeKey, &KeyButton, s_GoresModeKey, 0, &NewModifierCombination);
 
 				if(NewKey != s_GoresModeKey)
 				{

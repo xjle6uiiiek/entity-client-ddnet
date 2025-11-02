@@ -39,7 +39,7 @@ MACRO_CONFIG_INT(ClNamePlatesClan, cl_nameplates_clan, 0, 0, 1, CFGFLAG_CLIENT |
 MACRO_CONFIG_INT(ClNamePlatesClanSize, cl_nameplates_clan_size, 30, -50, 100, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Size of the clan name in name plates")
 MACRO_CONFIG_INT(ClNamePlatesIds, cl_nameplates_ids, 0, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Show client IDs in name plates")
 MACRO_CONFIG_INT(ClNamePlatesIdsSize, cl_nameplates_ids_size, 50, -50, 100, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Size of the client IDs in name plates")
-MACRO_CONFIG_INT(ClNamePlatesIdsSeperateLine, cl_nameplates_ids_seperate_line, 0, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Show client IDs on a seperate line in name plates")
+MACRO_CONFIG_INT(ClNamePlatesIdsSeparateLine, cl_nameplates_ids_seperate_line, 0, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Show client IDs on a separate line in name plates")
 MACRO_CONFIG_INT(ClNamePlatesOffset, cl_nameplates_offset, 30, 10, 50, CFGFLAG_CLIENT | CFGFLAG_SAVE, "The size of the gap between the tee and the name plate")
 
 MACRO_CONFIG_INT(ClNamePlatesOwn, cl_nameplates_own, 0, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Show own name plate (useful for demo recording)")
@@ -49,7 +49,7 @@ MACRO_CONFIG_INT(ClNamePlatesStrongSize, cl_nameplates_strong_size, 30, -50, 100
 
 MACRO_CONFIG_INT(ClAfkEmote, cl_afk_emote, 1, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Show zzz emote next to afk players")
 MACRO_CONFIG_INT(ClTextEntities, cl_text_entities, 1, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Render textual entity data")
-MACRO_CONFIG_INT(ClTextEntitiesSize, cl_text_entities_size, 100, 1, 100, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Size of textual entity data from 1 to 100%")
+MACRO_CONFIG_INT(ClTextEntitiesSize, cl_text_entities_size, 100, 20, 100, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Size of textual entity data from 20 to 100%")
 MACRO_CONFIG_INT(ClTextEntitiesEditor, cl_text_entities_editor, 1, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Render textual entity data in editor")
 MACRO_CONFIG_INT(ClStreamerMode, cl_streamer_mode, 0, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Censor sensitive information such as /save password")
 
@@ -214,8 +214,8 @@ MACRO_CONFIG_STR(ClDummy7SkinFeet, dummy7_skin_feet, protocol7::MAX_SKIN_ARRAY_S
 MACRO_CONFIG_STR(ClDummy7SkinEyes, dummy7_skin_eyes, protocol7::MAX_SKIN_ARRAY_SIZE, "standard", CFGFLAG_CLIENT | CFGFLAG_SAVE | CFGFLAG_INSENSITIVE, "Dummy skin eyes")
 
 // Client-side word censoring
-MACRO_CONFIG_INT(ClCensorChat, cl_censor_chat, 1, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Toggles chat censoring")
-MACRO_CONFIG_STR(ClCensorUrl, cl_censor_url, 100, "https://info.ddnet.org/censor.json", CFGFLAG_CLIENT | CFGFLAG_SAVE, "URL used to download words to censor (must start with https://)")
+// MACRO_CONFIG_INT(ClCensorChat, cl_censor_chat, 1, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Toggles chat censoring")
+// MACRO_CONFIG_STR(ClCensorUrl, cl_censor_url, 100, "https://info.ddnet.org/censor.json", CFGFLAG_CLIENT | CFGFLAG_SAVE, "URL used to download words to censor (must start with https://)")
 
 MACRO_CONFIG_INT(UiPage, ui_page, 6, 6, 13, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Interface page")
 MACRO_CONFIG_INT(UiSettingsPage, ui_settings_page, 0, 0, 12, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Interface settings page")
@@ -466,6 +466,8 @@ MACRO_CONFIG_STR(SvRegister, sv_register, 16, "1", CFGFLAG_SERVER, "Register ser
 MACRO_CONFIG_STR(SvRegisterExtra, sv_register_extra, 256, "", CFGFLAG_SERVER, "Extra headers to send to the register endpoint, comma-separated 'Header: Value' pairs")
 MACRO_CONFIG_STR(SvRegisterUrl, sv_register_url, 128, "https://master1.ddnet.org/ddnet/15/register", CFGFLAG_SERVER, "Masterserver URL to register to")
 MACRO_CONFIG_INT(SvRegisterPort, sv_register_port, 0, 0, 65535, CFGFLAG_SERVER, "Port for the master server to register the server with, useful if you are behind NAT, otherwise you only need sv_port")
+MACRO_CONFIG_STR(SvRegisterCommunityToken, sv_register_community_token, 128, "", CFGFLAG_SERVER, "Token to register this server to a particular community")
+MACRO_CONFIG_INT(SvFlag, sv_flag, -1, -1, 999, CFGFLAG_SERVER, "Country flag to group this community under (ISO 3166-1 numeric)")
 MACRO_CONFIG_STR(SvMapsBaseUrl, sv_maps_base_url, 128, "", CFGFLAG_SERVER, "Base path used to provide HTTPS map download URL to the clients")
 MACRO_CONFIG_STR(SvRconPassword, sv_rcon_password, 128, "", CFGFLAG_SERVER | CFGFLAG_NONTEEHISTORIC, "Remote console password (full access)")
 MACRO_CONFIG_STR(SvRconModPassword, sv_rcon_mod_password, 128, "", CFGFLAG_SERVER | CFGFLAG_NONTEEHISTORIC, "Remote console password for moderators (limited access)")
@@ -506,6 +508,7 @@ MACRO_CONFIG_INT(DbgGraphs, dbg_graphs, 0, 0, 1, CFGFLAG_CLIENT, "Show performan
 MACRO_CONFIG_INT(DbgGfx, dbg_gfx, 0, 0, 4, CFGFLAG_CLIENT, "Show graphic library warnings and errors, if the GPU supports it (0: none, 1: minimal, 2: affects performance, 3: verbose, 4: all)")
 MACRO_CONFIG_INT(DbgRenderGroupClips, dbg_render_group_clips, 0, 0, 1, CFGFLAG_CLIENT, "Debug group clipping")
 MACRO_CONFIG_INT(DbgRenderQuadClips, dbg_render_quad_clips, 0, 0, 1, CFGFLAG_CLIENT, "Debug quad layer clipping")
+MACRO_CONFIG_INT(DbgRenderClusterClips, dbg_render_cluster_clips, 0, 0, 1, CFGFLAG_CLIENT, "Debug quad layer cluster clipping")
 #ifdef CONF_DEBUG
 MACRO_CONFIG_INT(DbgStress, dbg_stress, 0, 0, 1, CFGFLAG_CLIENT, "Stress systems (Debug build only)")
 MACRO_CONFIG_STR(DbgStressServer, dbg_stress_server, 32, "localhost", CFGFLAG_CLIENT, "Server to stress (Debug build only)")
@@ -590,7 +593,7 @@ MACRO_CONFIG_INT(SvMinTeamSize, sv_min_team_size, 2, 1, SERVER_MAX_CLIENTS, CFGF
 MACRO_CONFIG_INT(SvMaxTeamSize, sv_max_team_size, SERVER_MAX_CLIENTS, 1, SERVER_MAX_CLIENTS, CFGFLAG_SERVER | CFGFLAG_GAME, "Maximum team size")
 MACRO_CONFIG_INT(SvMapVote, sv_map_vote, 1, 0, 1, CFGFLAG_SERVER, "Whether to allow /map")
 
-MACRO_CONFIG_STR(SvAnnouncementFileName, sv_announcement_filename, IO_MAX_PATH_LENGTH, "announcement.txt", CFGFLAG_SERVER, "File which contains the announcements, one on each line")
+MACRO_CONFIG_STR(SvAnnouncementFilename, sv_announcement_filename, IO_MAX_PATH_LENGTH, "announcement.txt", CFGFLAG_SERVER, "File which contains the announcements, one on each line")
 MACRO_CONFIG_INT(SvAnnouncementInterval, sv_announcement_interval, 120, 1, 9999, CFGFLAG_SERVER, "The time (minutes) for how often an announcement will be displayed from the announcement file")
 MACRO_CONFIG_INT(SvAnnouncementRandom, sv_announcement_random, 1, 0, 1, CFGFLAG_SERVER, "Whether announcements are sequential or random")
 

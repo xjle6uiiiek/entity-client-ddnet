@@ -2,9 +2,10 @@
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
 #include "pickup.h"
 
+#include "character.h"
+
 #include <generated/protocol.h>
 
-#include "character.h"
 #include <game/client/pickup_data.h>
 #include <game/collision.h>
 #include <game/mapitems.h>
@@ -26,7 +27,7 @@ void CPickup::Tick()
 				continue;
 			if(m_Layer == LAYER_SWITCH && m_Number > 0 && m_Number < (int)Switchers().size() && !Switchers()[m_Number].m_aStatus[pChr->Team()])
 				continue;
-			bool sound = false;
+			bool CreateSound = false;
 			// player picked us up, is someone was hooking us, let them go
 			switch(m_Type)
 			{
@@ -47,13 +48,13 @@ void CPickup::Tick()
 					{
 						pChr->SetWeaponGot(j, false);
 						pChr->SetWeaponAmmo(j, 0);
-						sound = true;
+						CreateSound = true;
 					}
 				}
 				pChr->SetNinjaActivationDir(vec2(0, 0));
 				pChr->SetNinjaActivationTick(-500);
 				pChr->SetNinjaCurrentMoveTime(0);
-				if(sound)
+				if(CreateSound)
 					pChr->SetLastWeapon(WEAPON_GUN);
 				if(pChr->GetActiveWeapon() >= WEAPON_SHOTGUN)
 					pChr->SetActiveWeapon(WEAPON_HAMMER);

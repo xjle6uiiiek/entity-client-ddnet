@@ -1,4 +1,5 @@
-#include <game/editor/editor.h>
+#include "image.h"
+#include "sound.h"
 
 #include <engine/client.h>
 #include <engine/console.h>
@@ -9,11 +10,9 @@
 #include <engine/sound.h>
 #include <engine/storage.h>
 
+#include <game/editor/editor.h>
 #include <game/gamecore.h>
 #include <game/mapitems_ex.h>
-
-#include "image.h"
-#include "sound.h"
 
 // compatibility with old sound layers
 class CSoundSourceDeprecated
@@ -34,20 +33,20 @@ void CDataFileWriterFinishJob::Run()
 	m_Writer.Finish();
 }
 
-CDataFileWriterFinishJob::CDataFileWriterFinishJob(const char *pRealFileName, const char *pTempFileName, CDataFileWriter &&Writer) :
+CDataFileWriterFinishJob::CDataFileWriterFinishJob(const char *pRealFilename, const char *pTempFilename, CDataFileWriter &&Writer) :
 	m_Writer(std::move(Writer))
 {
-	str_copy(m_aRealFileName, pRealFileName);
-	str_copy(m_aTempFileName, pTempFileName);
+	str_copy(m_aRealFilename, pRealFilename);
+	str_copy(m_aTempFilename, pTempFilename);
 }
 
-bool CEditorMap::Save(const char *pFileName, const std::function<void(const char *pErrorMessage)> &ErrorHandler)
+bool CEditorMap::Save(const char *pFilename, const std::function<void(const char *pErrorMessage)> &ErrorHandler)
 {
-	char aFileNameTmp[IO_MAX_PATH_LENGTH];
-	IStorage::FormatTmpPath(aFileNameTmp, sizeof(aFileNameTmp), pFileName);
+	char aFilenameTmp[IO_MAX_PATH_LENGTH];
+	IStorage::FormatTmpPath(aFilenameTmp, sizeof(aFilenameTmp), pFilename);
 
 	char aBuf[IO_MAX_PATH_LENGTH + 64];
-	str_format(aBuf, sizeof(aBuf), "saving to '%s'...", aFileNameTmp);
+	str_format(aBuf, sizeof(aBuf), "saving to '%s'...", aFilenameTmp);
 	m_pEditor->Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "editor", aBuf);
 
 	if(!PerformPreSaveSanityChecks(ErrorHandler))
@@ -56,9 +55,9 @@ bool CEditorMap::Save(const char *pFileName, const std::function<void(const char
 	}
 
 	CDataFileWriter Writer;
-	if(!Writer.Open(m_pEditor->Storage(), aFileNameTmp))
+	if(!Writer.Open(m_pEditor->Storage(), aFilenameTmp))
 	{
-		str_format(aBuf, sizeof(aBuf), "Error: Failed to open file '%s' for writing.", aFileNameTmp);
+		str_format(aBuf, sizeof(aBuf), "Error: Failed to open file '%s' for writing.", aFilenameTmp);
 		ErrorHandler(aBuf);
 		return false;
 	}
@@ -408,7 +407,7 @@ bool CEditorMap::Save(const char *pFileName, const std::function<void(const char
 	}
 
 	// finish the data file
-	std::shared_ptr<CDataFileWriterFinishJob> pWriterFinishJob = std::make_shared<CDataFileWriterFinishJob>(pFileName, aFileNameTmp, std::move(Writer));
+	std::shared_ptr<CDataFileWriterFinishJob> pWriterFinishJob = std::make_shared<CDataFileWriterFinishJob>(pFilename, aFilenameTmp, std::move(Writer));
 	m_pEditor->Engine()->AddJob(pWriterFinishJob);
 	m_pEditor->m_WriterFinishJobs.push_back(pWriterFinishJob);
 
@@ -443,10 +442,10 @@ bool CEditorMap::PerformPreSaveSanityChecks(const std::function<void(const char 
 	return Success;
 }
 
-bool CEditorMap::Load(const char *pFileName, int StorageType, const std::function<void(const char *pErrorMessage)> &ErrorHandler)
+bool CEditorMap::Load(const char *pFilename, int StorageType, const std::function<void(const char *pErrorMessage)> &ErrorHandler)
 {
 	CDataFileReader DataFile;
-	if(!DataFile.Open(m_pEditor->Storage(), pFileName, StorageType))
+	if(!DataFile.Open(m_pEditor->Storage(), pFilename, StorageType))
 	{
 		ErrorHandler("Error: Failed to open map file. See local console for details.");
 		return false;
@@ -625,7 +624,7 @@ bool CEditorMap::Load(const char *pFileName, int StorageType, const std::functio
 				// load external
 				if(m_pEditor->Storage()->ReadFile(aBuf, IStorage::TYPE_ALL, &pSound->m_pData, &pSound->m_DataSize))
 				{
-					pSound->m_SoundId = m_pEditor->Sound()->LoadOpusFromMem(pSound->m_pData, pSound->m_DataSize, true);
+					pSound->m_SoundId = m_pEditor->Sound()->LoadOpusFromMem(pSound->m_pData, pSound->m_DataSize, true, pSound->m_aName);
 				}
 				else
 				{
@@ -639,7 +638,7 @@ bool CEditorMap::Load(const char *pFileName, int StorageType, const std::functio
 				void *pData = DataFile.GetData(pItem->m_SoundData);
 				pSound->m_pData = malloc(pSound->m_DataSize);
 				mem_copy(pSound->m_pData, pData, pSound->m_DataSize);
-				pSound->m_SoundId = m_pEditor->Sound()->LoadOpusFromMem(pSound->m_pData, pSound->m_DataSize, true);
+				pSound->m_SoundId = m_pEditor->Sound()->LoadOpusFromMem(pSound->m_pData, pSound->m_DataSize, true, pSound->m_aName);
 			}
 
 			m_vpSounds.push_back(pSound);
@@ -1051,10 +1050,7 @@ bool CEditorMap::Load(const char *pFileName, int StorageType, const std::functio
 
 	PerformSanityChecks(ErrorHandler);
 
-	m_Modified = false;
-	m_ModifiedAuto = false;
-	m_LastModifiedTime = -1.0f;
-	m_LastSaveTime = m_pEditor->Client()->GlobalTime();
+	ResetModifiedState();
 	return true;
 }
 

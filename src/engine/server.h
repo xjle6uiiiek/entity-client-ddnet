@@ -3,21 +3,23 @@
 #ifndef ENGINE_SERVER_H
 #define ENGINE_SERVER_H
 
-#include <array>
-#include <optional>
-#include <type_traits>
+#include "kernel.h"
+#include "message.h"
 
 #include <base/hash.h>
 #include <base/math.h>
 #include <base/system.h>
 
-#include "kernel.h"
-#include "message.h"
 #include <engine/shared/jsonwriter.h>
 #include <engine/shared/protocol.h>
+
 #include <generated/protocol.h>
 #include <generated/protocol7.h>
 #include <generated/protocolglue.h>
+
+#include <array>
+#include <optional>
+#include <type_traits>
 
 struct CAntibotRoundData;
 
@@ -380,6 +382,7 @@ public:
 	virtual void TeehistorianRecordPlayerName(int ClientId, const char *pName) = 0;
 	virtual void TeehistorianRecordPlayerFinish(int ClientId, int TimeTicks) = 0;
 	virtual void TeehistorianRecordTeamFinish(int TeamId, int TimeTicks) = 0;
+	virtual void TeehistorianRecordAuthLogin(int ClientId, int Level, const char *pAuthName) = 0;
 
 	virtual void FillAntibot(CAntibotRoundData *pData) = 0;
 

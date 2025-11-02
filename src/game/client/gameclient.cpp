@@ -1,46 +1,7 @@
 /* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
 
-#include <chrono>
-#include <limits>
-
-#include <engine/client/checksum.h>
-#include <engine/client/enums.h>
-#include <engine/demo.h>
-#include <engine/discord.h>
-#include <engine/editor.h>
-#include <engine/engine.h>
-#include <engine/favorites.h>
-#include <engine/friends.h>
-#include <engine/graphics.h>
-#include <engine/map.h>
-#include <engine/serverbrowser.h>
-#include <engine/shared/config.h>
-#include <engine/sound.h>
-#include <engine/storage.h>
-#include <engine/textrender.h>
-#include <engine/updater.h>
-
-#include <generated/client_data.h>
-#include <generated/client_data7.h>
-#include <generated/protocol.h>
-#include <generated/protocol7.h>
-#include <generated/protocolglue.h>
-
-#include <base/log.h>
-#include <base/math.h>
-#include <base/system.h>
-#include <base/vmath.h>
-
 #include "gameclient.h"
-#include "lineinput.h"
-#include "race.h"
-#include "render.h"
-
-#include <game/client/projectile_data.h>
-#include <game/localization.h>
-#include <game/mapitems.h>
-#include <game/version.h>
 
 #include "components/background.h"
 #include "components/binds.h"
@@ -76,8 +37,48 @@
 #include "components/spectator.h"
 #include "components/statboard.h"
 #include "components/voting.h"
+#include "lineinput.h"
 #include "prediction/entities/character.h"
 #include "prediction/entities/projectile.h"
+#include "race.h"
+#include "render.h"
+
+#include <base/log.h>
+#include <base/math.h>
+#include <base/system.h>
+#include <base/vmath.h>
+
+#include <engine/client/checksum.h>
+#include <engine/client/enums.h>
+#include <engine/demo.h>
+#include <engine/discord.h>
+#include <engine/editor.h>
+#include <engine/engine.h>
+#include <engine/favorites.h>
+#include <engine/friends.h>
+#include <engine/graphics.h>
+#include <engine/map.h>
+#include <engine/serverbrowser.h>
+#include <engine/shared/config.h>
+#include <engine/shared/csv.h>
+#include <engine/sound.h>
+#include <engine/storage.h>
+#include <engine/textrender.h>
+#include <engine/updater.h>
+
+#include <generated/client_data.h>
+#include <generated/client_data7.h>
+#include <generated/protocol.h>
+#include <generated/protocol7.h>
+#include <generated/protocolglue.h>
+
+#include <game/client/projectile_data.h>
+#include <game/localization.h>
+#include <game/mapitems.h>
+#include <game/version.h>
+
+#include <chrono>
+#include <limits>
 
 using namespace std::chrono_literals;
 
@@ -166,7 +167,7 @@ void CGameClient::OnConsoleInit()
 					      &m_Motd,
 					      &m_Menus,
 					      &m_Tooltips,
-					      &m_Menus.m_Binder,
+					      &m_KeyBinder,
 					      &m_GameConsole,
 					      &m_MenuBackground,
 					      // E-Client
@@ -178,7 +179,7 @@ void CGameClient::OnConsoleInit()
 				      });
 
 	// build the input stack
-	m_vpInput.insert(m_vpInput.end(), {&m_Menus.m_Binder, // this will take over all input when we want to bind a key
+	m_vpInput.insert(m_vpInput.end(), {&m_KeyBinder, // this will take over all input when we want to bind a key
 						  &m_Binds.m_SpecialBinds,
 						  &m_GameConsole,
 						  &m_Chat, // chat has higher prio, due to that you can quit it by pressing esc
@@ -352,11 +353,11 @@ void CGameClient::OnInit()
 
 	if(GIT_SHORTREV_HASH)
 	{
-		str_format(m_aDDNetVersionStr, sizeof(m_aDDNetVersionStr), "%s %s (%s)", CLIENT_NAME, GAME_RELEASE_VERSION, GIT_SHORTREV_HASH);
+		str_format(m_aDDNetVersionStr, sizeof(m_aDDNetVersionStr), "%s v%s (%s)", CLIENT_NAME, ECLIENT_VERSION, GIT_SHORTREV_HASH);
 	}
 	else
 	{
-		str_format(m_aDDNetVersionStr, sizeof(m_aDDNetVersionStr), "%s %s", CLIENT_NAME, GAME_RELEASE_VERSION);
+		str_format(m_aDDNetVersionStr, sizeof(m_aDDNetVersionStr), "%s v%s", CLIENT_NAME, ECLIENT_VERSION);
 	}
 
 	// TODO: this should be different
@@ -528,9 +529,9 @@ void CGameClient::OnDummySwap()
 		m_Controls.ResetInput(PlayerOrDummy);
 		m_Controls.m_aInputData[PlayerOrDummy].m_Hook = 0;
 	}
-	int tmp = m_DummyInput.m_Fire;
+	const int PrevDummyFire = m_DummyInput.m_Fire;
 	m_DummyInput = m_Controls.m_aInputData[!g_Config.m_ClDummy];
-	m_Controls.m_aInputData[g_Config.m_ClDummy].m_Fire = tmp;
+	m_Controls.m_aInputData[g_Config.m_ClDummy].m_Fire = PrevDummyFire;
 	m_IsDummySwapping = 1;
 }
 
@@ -1046,13 +1047,13 @@ void CGameClient::OnMessage(int MsgId, CUnpacker *pUnpacker, int Conn, bool Dumm
 			// 31 is the magic number index of laser_damage
 			// which was removed in 0.7
 			// also in 0.6 it is unsed so we just set it to 0
-			int value = (Client()->IsSixup() && i == 30) ? 0 : pUnpacker->GetInt();
+			const int Value = (Client()->IsSixup() && i == 30) ? 0 : pUnpacker->GetInt();
 
 			// check for unpacking errors
 			if(pUnpacker->Error())
 				break;
 
-			pParams[i] = value;
+			pParams[i] = Value;
 		}
 
 		m_ServerMode = SERVERMODE_PURE;
@@ -1234,6 +1235,11 @@ void CGameClient::OnMessage(int MsgId, CUnpacker *pUnpacker, int Conn, bool Dumm
 	{
 		CNetMsg_Sv_PreInput *pMsg = (CNetMsg_Sv_PreInput *)pRawMsg;
 		m_aClients[pMsg->m_Owner].m_aPreInputs[pMsg->m_IntendedTick % 200] = *pMsg;
+	}
+	else if(MsgId == NETMSGTYPE_SV_SAVECODE)
+	{
+		const CNetMsg_Sv_SaveCode *pMsg = (CNetMsg_Sv_SaveCode *)pRawMsg;
+		OnSaveCodeNetMessage(pMsg);
 	}
 }
 
@@ -1727,6 +1733,7 @@ void CGameClient::OnNewSnapshot()
 					m_aClients[pInfo->m_ClientId].m_Team = pInfo->m_Team;
 					m_aClients[pInfo->m_ClientId].m_Active = true;
 					m_Snap.m_apPlayerInfos[pInfo->m_ClientId] = pInfo;
+					m_Snap.m_apPrevPlayerInfos[pInfo->m_ClientId] = static_cast<const CNetObj_PlayerInfo *>(Client()->SnapFindItem(IClient::SNAP_PREV, Item.m_Type, pInfo->m_ClientId));
 					m_Snap.m_NumPlayers++;
 
 					if(pInfo->m_Local)
@@ -2080,12 +2087,12 @@ void CGameClient::OnNewSnapshot()
 	// sort player infos by name
 	mem_copy(m_Snap.m_apInfoByName, m_Snap.m_apPlayerInfos, sizeof(m_Snap.m_apInfoByName));
 	std::stable_sort(m_Snap.m_apInfoByName, m_Snap.m_apInfoByName + MAX_CLIENTS,
-		[this](const CNetObj_PlayerInfo *p1, const CNetObj_PlayerInfo *p2) -> bool {
-			if(!p2)
-				return static_cast<bool>(p1);
-			if(!p1)
+		[this](const CNetObj_PlayerInfo *pPlayer1, const CNetObj_PlayerInfo *pPlayer2) -> bool {
+			if(!pPlayer2)
+				return static_cast<bool>(pPlayer1);
+			if(!pPlayer1)
 				return false;
-			return str_comp_nocase(m_aClients[p1->m_ClientId].m_aName, m_aClients[p2->m_ClientId].m_aName) < 0;
+			return str_comp_nocase(m_aClients[pPlayer1->m_ClientId].m_aName, m_aClients[pPlayer2->m_ClientId].m_aName) < 0;
 		});
 
 	bool TimeScore = m_GameInfo.m_TimeScore;
@@ -2095,23 +2102,23 @@ void CGameClient::OnNewSnapshot()
 	mem_copy(m_Snap.m_apInfoByScore, m_Snap.m_apInfoByName, sizeof(m_Snap.m_apInfoByScore));
 	if(Race7)
 		std::stable_sort(m_Snap.m_apInfoByScore, m_Snap.m_apInfoByScore + MAX_CLIENTS,
-			[](const CNetObj_PlayerInfo *p1, const CNetObj_PlayerInfo *p2) -> bool {
-				if(!p2)
-					return static_cast<bool>(p1);
-				if(!p1)
+			[](const CNetObj_PlayerInfo *pPlayer1, const CNetObj_PlayerInfo *pPlayer2) -> bool {
+				if(!pPlayer2)
+					return static_cast<bool>(pPlayer1);
+				if(!pPlayer1)
 					return false;
-				return (((p1->m_Score == -1) ? std::numeric_limits<int>::max() : p1->m_Score) <
-					((p2->m_Score == -1) ? std::numeric_limits<int>::max() : p2->m_Score));
+				return (((pPlayer1->m_Score == -1) ? std::numeric_limits<int>::max() : pPlayer1->m_Score) <
+					((pPlayer2->m_Score == -1) ? std::numeric_limits<int>::max() : pPlayer2->m_Score));
 			});
 	else
 		std::stable_sort(m_Snap.m_apInfoByScore, m_Snap.m_apInfoByScore + MAX_CLIENTS,
-			[TimeScore](const CNetObj_PlayerInfo *p1, const CNetObj_PlayerInfo *p2) -> bool {
-				if(!p2)
-					return static_cast<bool>(p1);
-				if(!p1)
+			[TimeScore](const CNetObj_PlayerInfo *pPlayer1, const CNetObj_PlayerInfo *pPlayer2) -> bool {
+				if(!pPlayer2)
+					return static_cast<bool>(pPlayer1);
+				if(!pPlayer1)
 					return false;
-				return (((TimeScore && p1->m_Score == -9999) ? std::numeric_limits<int>::min() : p1->m_Score) >
-					((TimeScore && p2->m_Score == -9999) ? std::numeric_limits<int>::min() : p2->m_Score));
+				return (((TimeScore && pPlayer1->m_Score == -9999) ? std::numeric_limits<int>::min() : pPlayer1->m_Score) >
+					((TimeScore && pPlayer2->m_Score == -9999) ? std::numeric_limits<int>::min() : pPlayer2->m_Score));
 			});
 
 	// sort player infos by DDRace Team (and score between)
@@ -3166,7 +3173,7 @@ void CGameClient::CClientData::Reset()
 	m_aName[0] = '\0';
 	m_aClan[0] = '\0';
 	m_Country = -1;
-	m_aSkinName[0] = '\0';
+	str_copy(m_aSkinName, "default");
 
 	m_Team = 0;
 	m_Emoticon = 0;
@@ -4107,7 +4114,7 @@ void CGameClient::DetectStrongHook()
 		CWorldCore World;
 		World.m_aTuning[g_Config.m_ClDummy] = m_aTuning[g_Config.m_ClDummy];
 
-		for(int dir = 0; dir < 2; dir++)
+		for(int Direction = 0; Direction < 2; Direction++)
 		{
 			CCharacterCore ToChar = pFromCharWorld->GetCore();
 			ToChar.Init(&World, Collision(), &m_Teams);
@@ -4121,7 +4128,7 @@ void CGameClient::DetectStrongHook()
 
 			for(int Tick = Client()->PrevGameTick(g_Config.m_ClDummy); Tick < Client()->GameTick(g_Config.m_ClDummy); Tick++)
 			{
-				if(dir == 0)
+				if(Direction == 0)
 				{
 					FromChar.Tick(false);
 					ToChar.Tick(false);
@@ -4136,7 +4143,7 @@ void CGameClient::DetectStrongHook()
 				ToChar.Move();
 				ToChar.Quantize();
 			}
-			aPredictErr[dir] = distance(ToChar.m_Vel, ToCharCur.m_Vel);
+			aPredictErr[Direction] = distance(ToChar.m_Vel, ToCharCur.m_Vel);
 		}
 		const float LOW = 0.0001f;
 		const float HIGH = 0.07f;
@@ -4906,7 +4913,7 @@ void CGameClient::OnSkinUpdate(const char *pSkinName)
 	const int SkinPrefixLength = str_length(pSkinPrefix);
 	char aSkinNameWithoutPrefix[MAX_SKIN_LENGTH];
 	if(SkinPrefixLength > 0 &&
-		str_utf8_comp_nocase_num(pSkinName, pSkinPrefix, SkinPrefixLength) == 0 &&
+		str_comp_num(pSkinName, pSkinPrefix, SkinPrefixLength) == 0 &&
 		pSkinName[SkinPrefixLength] == '_' &&
 		pSkinName[SkinPrefixLength + 1] != '\0')
 	{
@@ -4917,12 +4924,12 @@ void CGameClient::OnSkinUpdate(const char *pSkinName)
 		aSkinNameWithoutPrefix[0] = '\0';
 	}
 	const auto &&NameMatches = [&](const char *pCheckName) {
-		if(str_utf8_comp_nocase(pCheckName, pSkinName) == 0)
+		if(str_comp(pCheckName, pSkinName) == 0)
 		{
 			return true;
 		}
 		if(aSkinNameWithoutPrefix[0] != '\0' &&
-			str_utf8_comp_nocase(pCheckName, aSkinNameWithoutPrefix) == 0)
+			str_comp(pCheckName, aSkinNameWithoutPrefix) == 0)
 		{
 			return true;
 		}
@@ -5550,4 +5557,99 @@ const char *CGameClient::GetClientName(int ClientId)
 void CGameClient::OnServerBrowserUpdate()
 {
 	m_Menus.UpdateWarlistCache();
+}
+
+void CGameClient::OnSaveCodeNetMessage(const CNetMsg_Sv_SaveCode *pMsg)
+{
+	char aBuf[512];
+	if(pMsg->m_pError[0] != '\0')
+		m_Chat.AddLine(-1, TEAM_ALL, pMsg->m_pError);
+
+	int State = pMsg->m_State;
+	if(State == SAVESTATE_PENDING)
+	{
+		if(pMsg->m_pCode[0] == '\0')
+		{
+			str_format(aBuf,
+				sizeof(aBuf),
+				Localize("Team save in progress. You'll be able to load with '/load %s'"),
+				Config()->m_ClStreamerMode == 1 ? "*** *** ***" : pMsg->m_pGeneratedCode);
+		}
+		else
+		{
+			str_format(aBuf,
+				sizeof(aBuf),
+				Localize("Team save in progress. You'll be able to load with '/load %s' if save is successful or with '/load %s' if it fails"),
+				Config()->m_ClStreamerMode == 1 ? "***" : pMsg->m_pCode,
+				Config()->m_ClStreamerMode == 1 ? "*** *** ***" : pMsg->m_pGeneratedCode);
+		}
+		m_Chat.AddLine(-1, TEAM_ALL, aBuf);
+	}
+	else if(State == SAVESTATE_FALLBACKFILE)
+	{
+		if(pMsg->m_pServerName[0] == '\0')
+		{
+			str_format(
+				aBuf,
+				sizeof(aBuf),
+				Localize("Team successfully saved by %s. The database connection failed, using generated save code instead to avoid collisions. Use '/load %s' to continue"),
+				pMsg->m_pSaveRequester,
+				Config()->m_ClStreamerMode == 1 ? "*** *** ***" : pMsg->m_pGeneratedCode);
+		}
+		else
+		{
+			str_format(
+				aBuf,
+				sizeof(aBuf),
+				Localize("Team successfully saved by %s. The database connection failed, using generated save code instead to avoid collisions. Use '/load %s' on %s to continue"),
+				pMsg->m_pSaveRequester,
+				Config()->m_ClStreamerMode == 1 ? "*** *** ***" : pMsg->m_pGeneratedCode,
+				pMsg->m_pServerName);
+		}
+		m_Chat.AddLine(-1, TEAM_ALL, aBuf);
+	}
+	else if(State == SAVESTATE_ERROR)
+	{
+		m_Chat.AddLine(-1, TEAM_ALL, Localize("Save failed!"));
+	}
+
+	if(State != SAVESTATE_PENDING && State != SAVESTATE_ERROR && Client()->State() != IClient::STATE_DEMOPLAYBACK)
+	{
+		StoreSave(pMsg->m_pTeamMembers, pMsg->m_pGeneratedCode);
+	}
+}
+
+void CGameClient::StoreSave(const char *pTeamMembers, const char *pGeneratedCode) const
+{
+	static constexpr const char *SAVES_HEADER[] = {
+		"Time",
+		"Players",
+		"Map",
+		"Code",
+	};
+
+	char aTimestamp[20];
+	str_timestamp_format(aTimestamp, sizeof(aTimestamp), FORMAT_SPACE);
+
+	const bool SavesFileExists = Storage()->FileExists(SAVES_FILE, IStorage::TYPE_SAVE);
+	IOHANDLE File = Storage()->OpenFile(SAVES_FILE, IOFLAG_APPEND, IStorage::TYPE_SAVE);
+	if(!File)
+	{
+		log_error("saves", "Failed to open the saves file '%s'", SAVES_FILE);
+		return;
+	}
+
+	const char *apColumns[std::size(SAVES_HEADER)] = {
+		aTimestamp,
+		pTeamMembers,
+		Client()->GetCurrentMap(),
+		pGeneratedCode,
+	};
+
+	if(!SavesFileExists)
+	{
+		CsvWrite(File, std::size(SAVES_HEADER), SAVES_HEADER);
+	}
+	CsvWrite(File, std::size(SAVES_HEADER), apColumns);
+	io_close(File);
 }
