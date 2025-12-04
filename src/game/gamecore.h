@@ -168,7 +168,6 @@ public:
 		return m_pPrng->RandomBits() % BelowThis;
 	}
 
-	CTuningParams m_aTuning[2];
 	class CCharacterCore *m_apCharacters[MAX_CLIENTS];
 	CPrng *m_pPrng;
 
@@ -182,8 +181,8 @@ class CCharacterCore
 	CCollision *m_pCollision;
 
 public:
-	static constexpr float PhysicalSize() { return 28.0f; };
-	static constexpr vec2 PhysicalSizeVec2() { return vec2(28.0f, 28.0f); };
+	static constexpr float PhysicalSize() { return 28.0f; }
+	static constexpr vec2 PhysicalSizeVec2() { return vec2(28.0f, 28.0f); }
 	vec2 m_Pos;
 	vec2 m_Vel;
 
@@ -252,9 +251,6 @@ public:
 	void ReadDDNet(const CNetObj_DDNetCharacter *pObjDDNet);
 	bool m_Solo;
 	bool m_Jetpack;
-
-	// FoxNet
-	bool m_ExplosionGun;
 
 	bool m_CollisionDisabled;
 	bool m_EndlessHook;

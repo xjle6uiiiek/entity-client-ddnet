@@ -380,37 +380,75 @@ void CGameTeams::CheckTeamFinished(int Team)
 	}
 }
 
-const char *CGameTeams::SetCharacterTeam(int ClientId, int Team)
+bool CGameTeams::CanJoinTeam(int ClientId, int Team, char *pError, int ErrorSize) const
 {
 	int CurrentTeam = m_Core.Team(ClientId);
 
 	if(ClientId < 0 || ClientId >= MAX_CLIENTS)
-		return "Invalid client ID";
-	if(Team < 0 || Team > NUM_DDRACE_TEAMS)
-		return "Invalid team number";
+	{
+		str_format(pError, ErrorSize, "Invalid client ID: %d", ClientId);
+		return false;
+	}
+	if(!IsValidTeamNumber(Team) && Team != TEAM_SUPER)
+	{
+		str_format(pError, ErrorSize, "Invalid team number: %d", Team);
+		return false;
+	}
 	if(Team != TEAM_SUPER && m_aTeamState[Team] > ETeamState::OPEN && !m_aPractice[Team] && !m_aTeamFlock[Team])
-		return "This team started already";
+	{
+		str_copy(pError, "This team started already", ErrorSize);
+		return false;
+	}
 	if(CurrentTeam == Team)
-		return "You are in this team already";
+	{
+		str_copy(pError, "You are in this team already", ErrorSize);
+		return false;
+	}
 	if(!Character(ClientId))
-		return "Your character is not valid";
+	{
+		str_copy(pError, "You can't change teams while you are dead/a spectator.", ErrorSize);
+		return false;
+	}
 	if(Team == TEAM_SUPER && !Character(ClientId)->IsSuper())
-		return "You can't join super team if you don't have super rights";
+	{
+		str_copy(pError, "You can't join super team if you don't have super rights", ErrorSize);
+		return false;
+	}
 	if(Team != TEAM_SUPER && Character(ClientId)->m_DDRaceState != ERaceState::NONE && (m_aTeamState[CurrentTeam] < ETeamState::FINISHED || Team != 0))
-		return "You have started racing already";
+	{
+		str_copy(pError, "You have started racing already", ErrorSize);
+		return false;
+	}
 	// No cheating through noob filter with practice and then leaving team
 	if(m_aPractice[CurrentTeam] && !m_pGameContext->PracticeByDefault())
-		return "You have used practice mode already";
+	{
+		str_copy(pError, "You have used practice mode already", ErrorSize);
+		return false;
+	}
 
 	// you can not join a team which is currently in the process of saving,
 	// because the save-process can fail and then the team is reset into the game
 	if(Team != TEAM_SUPER && GetSaving(Team))
-		return "This team is currently saving";
+	{
+		str_copy(pError, "This team is currently saving", ErrorSize);
+		return false;
+	}
 	if(CurrentTeam != TEAM_SUPER && GetSaving(CurrentTeam))
-		return "Your team is currently saving";
+	{
+		str_copy(pError, "Your team is currently saving", ErrorSize);
+		return false;
+	}
+
+	return true;
+}
+
+bool CGameTeams::SetCharacterTeam(int ClientId, int Team, char *pError, int ErrorSize)
+{
+	if(!CanJoinTeam(ClientId, Team, pError, ErrorSize))
+		return false;
 
 	SetForceCharacterTeam(ClientId, Team);
-	return nullptr;
+	return true;
 }
 
 void CGameTeams::SetForceCharacterTeam(int ClientId, int Team)
@@ -689,7 +727,7 @@ void CGameTeams::OnTeamFinish(int Team, CPlayer **Players, unsigned int Size, in
 	{
 		aPlayerCids[i] = Players[i]->GetCid();
 
-		if(g_Config.m_SvRejoinTeam0 && g_Config.m_SvTeam != SV_TEAM_FORCED_SOLO && (m_Core.Team(Players[i]->GetCid()) >= TEAM_SUPER || !m_aTeamLocked[m_Core.Team(Players[i]->GetCid())]))
+		if(g_Config.m_SvRejoinTeam0 && g_Config.m_SvTeam != SV_TEAM_FORCED_SOLO && (!IsValidTeamNumber(m_Core.Team(Players[i]->GetCid())) || !m_aTeamLocked[m_Core.Team(Players[i]->GetCid())]))
 		{
 			SetForceCharacterTeam(Players[i]->GetCid(), TEAM_FLOCK);
 			char aBuf[512];
@@ -836,12 +874,22 @@ CCharacter *CGameTeams::Character(int ClientId)
 	return GameServer()->GetPlayerChar(ClientId);
 }
 
+const CCharacter *CGameTeams::Character(int ClientId) const
+{
+	return GameServer()->GetPlayerChar(ClientId);
+}
+
 CPlayer *CGameTeams::GetPlayer(int ClientId)
 {
 	return GameServer()->m_apPlayers[ClientId];
 }
 
-class CGameContext *CGameTeams::GameServer()
+CGameContext *CGameTeams::GameServer()
+{
+	return m_pGameContext;
+}
+
+const CGameContext *CGameTeams::GameServer() const
 {
 	return m_pGameContext;
 }
@@ -1137,7 +1185,7 @@ void CGameTeams::OnCharacterSpawn(int ClientId)
 	if(GetSaving(Team))
 		return;
 
-	if(m_Core.Team(ClientId) >= TEAM_SUPER || !m_aTeamLocked[Team])
+	if(!IsValidTeamNumber(Team) || !m_aTeamLocked[Team])
 	{
 		if(g_Config.m_SvTeam != SV_TEAM_FORCED_SOLO)
 			SetForceCharacterTeam(ClientId, TEAM_FLOCK);
@@ -1227,13 +1275,13 @@ void CGameTeams::OnCharacterDeath(int ClientId, int Weapon)
 
 void CGameTeams::SetTeamLock(int Team, bool Lock)
 {
-	if(Team > TEAM_FLOCK && Team < TEAM_SUPER)
+	if(Team != TEAM_FLOCK && IsValidTeamNumber(Team))
 		m_aTeamLocked[Team] = Lock;
 }
 
 void CGameTeams::SetTeamFlock(int Team, bool Mode)
 {
-	if(Team > TEAM_FLOCK && Team < TEAM_SUPER)
+	if(Team != TEAM_FLOCK && IsValidTeamNumber(Team))
 		m_aTeamFlock[Team] = Mode;
 }
 
@@ -1244,7 +1292,7 @@ void CGameTeams::ResetInvited(int Team)
 
 void CGameTeams::SetClientInvited(int Team, int ClientId, bool Invited)
 {
-	if(Team > TEAM_FLOCK && Team < TEAM_SUPER)
+	if(Team != TEAM_FLOCK && IsValidTeamNumber(Team))
 	{
 		if(Invited)
 			m_aInvited[Team].set(ClientId);
@@ -1309,7 +1357,7 @@ ETeamState CGameTeams::GetTeamState(int Team) const
 
 bool CGameTeams::TeamLocked(int Team) const
 {
-	if(Team <= TEAM_FLOCK || Team >= TEAM_SUPER)
+	if(Team == TEAM_FLOCK || !IsValidTeamNumber(Team))
 		return false;
 
 	return m_aTeamLocked[Team];
@@ -1317,7 +1365,8 @@ bool CGameTeams::TeamLocked(int Team) const
 
 bool CGameTeams::TeamFlock(int Team) const
 {
-	if(Team <= TEAM_FLOCK || Team >= TEAM_SUPER)
+	// this is for team0mode, TEAM_FLOCK is handled differently
+	if(Team == TEAM_FLOCK || !IsValidTeamNumber(Team))
 		return false;
 
 	return m_aTeamFlock[Team];
@@ -1350,7 +1399,7 @@ void CGameTeams::SetSaving(int TeamId, std::shared_ptr<CScoreSaveResult> &SaveRe
 
 bool CGameTeams::GetSaving(int TeamId) const
 {
-	if(TeamId < TEAM_FLOCK || TeamId >= TEAM_SUPER)
+	if(!IsValidTeamNumber(TeamId))
 		return false;
 	if(g_Config.m_SvTeam != SV_TEAM_FORCED_SOLO && TeamId == TEAM_FLOCK)
 		return false;
@@ -1360,7 +1409,7 @@ bool CGameTeams::GetSaving(int TeamId) const
 
 void CGameTeams::SetPractice(int Team, bool Enabled)
 {
-	if(Team < TEAM_FLOCK || Team >= TEAM_SUPER)
+	if(!IsValidTeamNumber(Team))
 		return;
 	if(g_Config.m_SvTeam != SV_TEAM_FORCED_SOLO && Team == TEAM_FLOCK)
 	{
@@ -1374,7 +1423,7 @@ void CGameTeams::SetPractice(int Team, bool Enabled)
 
 bool CGameTeams::IsPractice(int Team)
 {
-	if(Team < TEAM_FLOCK || Team >= TEAM_SUPER)
+	if(!IsValidTeamNumber(Team))
 		return false;
 	if(g_Config.m_SvTeam != SV_TEAM_FORCED_SOLO && Team == TEAM_FLOCK)
 	{
@@ -1385,4 +1434,9 @@ bool CGameTeams::IsPractice(int Team)
 	}
 
 	return m_aPractice[Team];
+}
+
+bool CGameTeams::IsValidTeamNumber(int Team) const
+{
+	return Team >= TEAM_FLOCK && Team < NUM_DDRACE_TEAMS - 1; // no TEAM_SUPER
 }

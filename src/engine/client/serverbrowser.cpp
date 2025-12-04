@@ -1365,6 +1365,7 @@ const json_value *CServerBrowser::LoadDDNetInfo()
 		UpdateServerCommunity(&m_ppServerlist[i]->m_Info);
 		UpdateServerRank(&m_ppServerlist[i]->m_Info);
 	}
+	ValidateServerlistType();
 	return m_pDDNetInfo;
 }
 
@@ -1502,20 +1503,25 @@ void CServerBrowser::LoadDDNetServers()
 	m_vCommunities.clear();
 	m_CommunityServersByAddr.clear();
 
-	if(!m_pDDNetInfo)
+	// TClient
+	std::vector<json_value *> vCommunities;
+	if(m_pDDNetInfo)
 	{
-		return;
+		const json_value &Communities = (*m_pDDNetInfo)["communities"];
+		if(Communities.type == json_array)
+		{
+			vCommunities.insert(
+				vCommunities.end(),
+				Communities.u.array.values,
+				Communities.u.array.values + Communities.u.array.length);
+		}
 	}
+	if(m_CustomCommunitiesFunction)
+		m_CustomCommunitiesFunction(vCommunities);
 
-	const json_value &Communities = (*m_pDDNetInfo)["communities"];
-	if(Communities.type != json_array)
+	for(unsigned CommunityIndex = 0; CommunityIndex < vCommunities.size(); ++CommunityIndex)
 	{
-		return;
-	}
-
-	for(unsigned CommunityIndex = 0; CommunityIndex < Communities.u.array.length; ++CommunityIndex)
-	{
-		const json_value &Community = Communities[CommunityIndex];
+		const json_value &Community = *vCommunities[CommunityIndex];
 		if(Community.type != json_object)
 		{
 			log_error("serverbrowser", "invalid community (CommunityIndex=%d)", (int)CommunityIndex);
@@ -1666,6 +1672,21 @@ void CServerBrowser::UpdateServerRank(CServerInfo *pInfo) const
 {
 	const CCommunity *pCommunity = Community(pInfo->m_aCommunityId);
 	pInfo->m_HasRank = pCommunity == nullptr ? CServerInfo::RANK_UNAVAILABLE : pCommunity->HasRank(pInfo->m_aMap);
+}
+
+void CServerBrowser::ValidateServerlistType()
+{
+	if(m_ServerlistType >= IServerBrowser::TYPE_FAVORITE_COMMUNITY_1 &&
+		m_ServerlistType <= IServerBrowser::TYPE_FAVORITE_COMMUNITY_5)
+	{
+		const size_t CommunityIndex = m_ServerlistType - IServerBrowser::TYPE_FAVORITE_COMMUNITY_1;
+		if(CommunityIndex >= FavoriteCommunities().size())
+		{
+			// Reset to internet type if there is no favorite community for the current browser type,
+			// in case communities have been removed.
+			m_ServerlistType = IServerBrowser::TYPE_INTERNET;
+		}
+	}
 }
 
 const char *CServerBrowser::GetTutorialServer()

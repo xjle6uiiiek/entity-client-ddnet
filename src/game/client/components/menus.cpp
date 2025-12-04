@@ -545,7 +545,7 @@ void CMenus::RenderMenubar(CUIRect Box, IClient::EClientState ClientState)
 	}
 	else
 	{
-		dbg_assert(false, "Client state invalid for RenderMenubar");
+		dbg_assert_failed("Client state %d is invalid for RenderMenubar", ClientState);
 	}
 
 	// First render buttons aligned from right side so remaining
@@ -597,10 +597,8 @@ void CMenus::RenderMenubar(CUIRect Box, IClient::EClientState ClientState)
 			NewPage = PAGE_DEMOS;
 		}
 		GameClient()->m_Tooltips.DoToolTip(&s_DemoButton, &Button, Localize("Demos"));
-	}
-
-	// E-Client
-	{
+	
+		// E-Client
 		Box.VSplitRight(10.0f, &Box, nullptr);
 		Box.VSplitRight(33.0f, &Box, &Button);
 		static CButtonContainer s_EClientButton;
@@ -611,18 +609,15 @@ void CMenus::RenderMenubar(CUIRect Box, IClient::EClientState ClientState)
 			Inactive = ColorRGBA(0.2f, 0.7f, 0.5, 0.4f);
 			Active = ColorRGBA(0.3f, 0.8f, 0.6, 0.5f);
 		}
-		if(DoButton_MenuTab(&s_EClientButton, FONT_ICON_INFO, ActivePage == PAGE_ECLIENTNEWS, &Button, IGraphics::CORNER_T, &m_aAnimatorsSmallPage[SMALL_TAB_ECLIENT], &Inactive, nullptr, &Active))
+		if(DoButton_MenuTab(&s_EClientButton, FONT_ICON_INFO, ActivePage == PAGE_ECLIENTNEWS, &Button, IGraphics::CORNER_T, &m_aAnimatorsSmallPage[SMALL_TAB_ECLIENT], &Inactive, &Active))
 		{
 			NewPage = PAGE_ECLIENTNEWS;
 			ResetTeePos = true;
 			g_Config.m_EcUnreadNews = false;
 		}
 		GameClient()->m_Tooltips.DoToolTip(&s_EClientButton, &Button, Localize("News"));
-	}
-
-	Box.VSplitRight(10.0f, &Box, nullptr);
-	if(ClientState == IClient::STATE_OFFLINE)
-	{
+	
+		Box.VSplitRight(10.0f, &Box, nullptr);
 		Box.VSplitLeft(33.0f, &Button, &Box);
 
 		bool GotNewsOrUpdate = false;
@@ -789,11 +784,38 @@ void CMenus::RenderMenubar(CUIRect Box, IClient::EClientState ClientState)
 				NewPage = PAGE_DEMOS;
 			}
 			GameClient()->m_Tooltips.DoToolTip(&s_DemoButton, &Button, Localize("Demos"));
+
+			TextRender()->SetRenderFlags(0);
+			TextRender()->SetFontPreset(EFontPreset::DEFAULT_FONT);
+		}
+		if(Box.w >= 10.0f + 33.0f + 10.0f)
+		{
+			TextRender()->SetFontPreset(EFontPreset::ICON_FONT);
+			TextRender()->SetRenderFlags(ETextRenderFlags::TEXT_RENDER_FLAG_ONLY_ADVANCE_WIDTH | ETextRenderFlags::TEXT_RENDER_FLAG_NO_X_BEARING | ETextRenderFlags::TEXT_RENDER_FLAG_NO_Y_BEARING | ETextRenderFlags::TEXT_RENDER_FLAG_NO_PIXEL_ALIGNMENT | ETextRenderFlags::TEXT_RENDER_FLAG_NO_OVERSIZE);
+
+			Box.VSplitRight(10.0f, &Box, nullptr);
+			Box.VSplitRight(33.0f, &Box, &Button);
+			static CButtonContainer s_EClientButton;
+			ColorRGBA Inactive = ms_ColorTabbarInactive;
+			ColorRGBA Active = ms_ColorTabbarActive;
+			if(g_Config.m_EcUnreadNews)
+			{
+				Inactive = ColorRGBA(0.2f, 0.7f, 0.5, 0.4f);
+				Active = ColorRGBA(0.3f, 0.8f, 0.6, 0.5f);
+			}
+			if(DoButton_MenuTab(&s_EClientButton, FONT_ICON_INFO, ActivePage == PAGE_ECLIENTNEWS, &Button, IGraphics::CORNER_T, &m_aAnimatorsSmallPage[SMALL_TAB_ECLIENT], &Inactive, &Active))
+			{
+				NewPage = PAGE_ECLIENTNEWS;
+				ResetTeePos = true;
+				g_Config.m_EcUnreadNews = false;
+			}
+			GameClient()->m_Tooltips.DoToolTip(&s_EClientButton, &Button, Localize("News"));
 			Box.VSplitRight(10.0f, &Box, nullptr);
 
 			TextRender()->SetRenderFlags(0);
 			TextRender()->SetFontPreset(EFontPreset::DEFAULT_FONT);
 		}
+
 	}
 
 	if(NewPage != -1)
@@ -1204,7 +1226,7 @@ void CMenus::Render()
 			}
 			else
 			{
-				dbg_assert(false, "m_MenuPage invalid STATE_OFFLINE");
+				dbg_assert_failed("Invalid m_MenuPage: %d", m_MenuPage);
 			}
 
 			RenderMenubar(TabBar, ClientState);
@@ -1260,7 +1282,7 @@ void CMenus::Render()
 			}
 			else
 			{
-				dbg_assert(false, "m_GamePage invalid STATE_ONLINE");
+				dbg_assert_failed("Invalid m_GamePage: %d", m_GamePage);
 			}
 
 			RenderMenubar(TabBar, ClientState);
@@ -2111,8 +2133,7 @@ void CMenus::RenderPopupLoading(CUIRect Screen)
 			str_copy(aLabel1, Localize("Sending initial client info"));
 			break;
 		default:
-			dbg_assert(false, "Invalid loading state for RenderPopupLoading");
-			break;
+			dbg_assert_failed("Invalid loading state %d for RenderPopupLoading", static_cast<int>(Client()->LoadingStateDetail()));
 		}
 		aLabel2[0] = '\0';
 	}
@@ -2369,8 +2390,6 @@ void CMenus::OnWindowResize()
 
 void CMenus::OnRender()
 {
-	Ui()->StartCheck();
-
 	if(Client()->State() != IClient::STATE_ONLINE && Client()->State() != IClient::STATE_DEMOPLAYBACK)
 		SetActive(true);
 
@@ -2389,12 +2408,12 @@ void CMenus::OnRender()
 		}
 		else if(Client()->State() != IClient::STATE_DEMOPLAYBACK)
 		{
-			Ui()->FinishCheck();
 			Ui()->ClearHotkeys();
 			return;
 		}
 	}
 
+	Ui()->StartCheck();
 	UpdateColors();
 
 	Ui()->Update();
@@ -2426,7 +2445,7 @@ void CMenus::UpdateColors()
 	ms_ColorTabbarHoverOutgame = ColorRGBA(1.0f, 1.0f, 1.0f, 0.25f);
 
 	const float ColorIngameScaleI = 0.5f;
-	const float ColorIngameAcaleA = 0.2f;
+	const float ColorIngameScaleA = 0.2f;
 
 	ms_ColorTabbarInactiveIngame = ColorRGBA(
 		ms_GuiColor.r * ColorIngameScaleI,
@@ -2435,9 +2454,9 @@ void CMenus::UpdateColors()
 		ms_GuiColor.a * 0.8f);
 
 	ms_ColorTabbarActiveIngame = ColorRGBA(
-		ms_GuiColor.r * ColorIngameAcaleA,
-		ms_GuiColor.g * ColorIngameAcaleA,
-		ms_GuiColor.b * ColorIngameAcaleA,
+		ms_GuiColor.r * ColorIngameScaleA,
+		ms_GuiColor.g * ColorIngameScaleA,
+		ms_GuiColor.b * ColorIngameScaleA,
 		ms_GuiColor.a);
 
 	ms_ColorTabbarHoverIngame = ColorRGBA(1.0f, 1.0f, 1.0f, 0.75f);
@@ -2509,9 +2528,8 @@ int CMenus::DoButton_CheckBox_Tristate(const void *pId, const char *pText, TRIST
 	case TRISTATE::ALL:
 		return DoButton_CheckBox_Common(pId, pText, "X", pRect, BUTTONFLAG_LEFT);
 	default:
-		dbg_assert(false, "invalid tristate");
+		dbg_assert_failed("Invalid tristate. Checked: %d", static_cast<int>(Checked));
 	}
-	dbg_break();
 }
 
 int CMenus::MenuImageScan(const char *pName, int IsDir, int DirType, void *pUser)

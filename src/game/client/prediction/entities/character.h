@@ -108,7 +108,7 @@ public:
 		{
 			m_Input.m_TargetY = m_LatestInput.m_TargetY = -1;
 		}
-	};
+	}
 	int GetJumped() const { return m_Core.m_Jumped; }
 	int GetAttackTick() const { return m_AttackTick; }
 	int GetStrongWeakId() const { return m_StrongWeakId; }
@@ -141,7 +141,7 @@ public:
 
 private:
 	// weapon info
-	int m_aHitObjects[10];
+	int m_aHitObjects[MAX_CLIENTS];
 	int m_NumObjectsHit;
 
 	int m_LastWeapon;
@@ -178,8 +178,6 @@ private:
 	void DDRaceTick();
 	void DDRacePostCoreTick();
 	void HandleTuneLayer();
-
-	CTuningParams *CharacterTuning();
 
 	int m_StrongWeakId;
 

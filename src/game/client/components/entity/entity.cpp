@@ -48,8 +48,7 @@ void CEClient::OnChatMessage(int ClientId, int Team, const char *pMsg)
 	if(Client()->DummyConnected() && !str_comp(aName, GameClient()->m_aClients[GameClient()->m_aLocalIds[1]].m_aName))
 		return;
 
-	bool HiddenMessage = (GameClient()->m_WarList.m_WarPlayers[ClientId].IsMuted || m_TempPlayers[ClientId].IsTempMute) ||
-			     (g_Config.m_ClHideEnemyChat && (GameClient()->m_WarList.GetWarData(ClientId).m_WarGroupMatches[1] || GameClient()->m_EClient.m_TempPlayers[ClientId].IsTempWar));
+	bool HiddenMessage = GameClient()->m_WarList.m_WarPlayers[ClientId].IsMuted || (g_Config.m_ClHideEnemyChat && (GameClient()->m_WarList.GetWarData(ClientId).m_WarGroupMatches[1]));
 
 	if(!HiddenMessage)
 	{
@@ -64,7 +63,7 @@ void CEClient::OnChatMessage(int ClientId, int Team, const char *pMsg)
 	if(ClientId != m_LastReplyId)
 	{
 		char Reply[MAX_LINE_LENGTH];
-		if(g_Config.m_ClReplyMuted && (GameClient()->m_WarList.m_WarPlayers[ClientId].IsMuted || m_TempPlayers[ClientId].IsTempMute))
+		if(g_Config.m_ClReplyMuted && GameClient()->m_WarList.m_WarPlayers[ClientId].IsMuted)
 		{
 			str_format(Reply, sizeof(Reply), "%s: %s", aName, g_Config.m_ClAutoReplyMutedMsg);
 
@@ -150,7 +149,7 @@ void CEClient::AutoJoinTeam()
 					GameClient()->ClientMessage(Joined);
 
 					m_JoinedTeam = true;
-					m_AttempedJoinTeam = true;
+					m_AttemptedJoinTeam = true;
 				}
 				if(GameClient()->m_Teams.SameTeam(Local, ClientId) && m_JoinedTeam)
 				{
@@ -164,15 +163,15 @@ void CEClient::AutoJoinTeam()
 
 					m_JoinedTeam = false;
 				}
-				if(!GameClient()->m_Teams.SameTeam(Local, ClientId) && m_AttempedJoinTeam)
+				if(!GameClient()->m_Teams.SameTeam(Local, ClientId) && m_AttemptedJoinTeam)
 				{
 					char Joined[2048] = "Couldn't Join The Team of ";
 					str_append(Joined, GameClient()->m_aClients[ClientId].m_aName);
 					GameClient()->ClientMessage(Joined);
 
-					m_AttempedJoinTeam = false;
+					m_AttemptedJoinTeam = false;
 				}
-				if(PrevTeam != Team && m_AttempedJoinTeam)
+				if(PrevTeam != Team && m_AttemptedJoinTeam)
 				{
 					GameClient()->ClientMessage("team has changed");
 					m_JoinedTeam = false;
@@ -186,7 +185,7 @@ void CEClient::AutoJoinTeam()
 				if(LocalTeam != Team)
 				{
 					PrevTeam = Team;
-					m_AttempedJoinTeam = false;
+					m_AttemptedJoinTeam = false;
 					LocalTeam = GameClient()->m_Teams.Team(Local);
 				}
 				return;
@@ -208,9 +207,9 @@ void CEClient::GoresMode()
 
 	if(g_Config.m_ClGoresModeDisableIfWeapons)
 	{
-		if(Core.m_aWeapons[WEAPON_GRENADE].m_Got || Core.m_aWeapons[WEAPON_LASER].m_Got || Core.m_ExplosionGun || Core.m_aWeapons[WEAPON_SHOTGUN].m_Got)
+		if(Core.m_aWeapons[WEAPON_GRENADE].m_Got || Core.m_aWeapons[WEAPON_LASER].m_Got || Core.m_aWeapons[WEAPON_SHOTGUN].m_Got)
 			m_WeaponsGot = true;
-		if((!Core.m_aWeapons[WEAPON_GRENADE].m_Got && !Core.m_aWeapons[WEAPON_LASER].m_Got && !Core.m_ExplosionGun && !Core.m_aWeapons[WEAPON_SHOTGUN].m_Got) && m_WeaponsGot)
+		if((!Core.m_aWeapons[WEAPON_GRENADE].m_Got && !Core.m_aWeapons[WEAPON_LASER].m_Got && !Core.m_aWeapons[WEAPON_SHOTGUN].m_Got) && m_WeaponsGot)
 			m_WeaponsGot = false;
 
 		if(m_WeaponsGot)
@@ -225,8 +224,8 @@ void CEClient::GoresMode()
 		return;
 	}
 	const char *pKeyName = Input()->KeyName(Key);
-	const CBinds::CBindSlot BindSlot = GameClient()->m_Binds.GetBindSlot(pKeyName);
-	const char *pBind = GameClient()->m_Binds.m_aapKeyBindings[BindSlot.m_ModifierMask][BindSlot.m_Key];
+	const CBindSlot BindSlot = GameClient()->m_Binds.GetBindSlot(pKeyName);
+	const char *pBind = GameClient()->m_Binds.GetKeyBinding(BindSlot.m_ModifierMask, BindSlot.m_Key);
 	if(!pBind)
 		return;
 
@@ -256,17 +255,13 @@ void CEClient::ConchainGoresMode(IConsole::IResult *pResult, void *pUserData, IC
 		int GoresMode = pResult->GetInteger(0);
 
 		if(GoresMode)
-		{
-			pSelf->GoresModeSave(true);
-		}
+			pSelf->GoresModeSave();
 		else
-		{
 			pSelf->GoresModeRestore();
-		}
 	}
 }
 
-void CEClient::GoresModeSave(bool Enable)
+void CEClient::GoresModeSave()
 {
 	int Key = g_Config.m_ClGoresModeKey;
 	if(Key < KEY_FIRST || Key >= KEY_LAST)
@@ -277,8 +272,8 @@ void CEClient::GoresModeSave(bool Enable)
 	}
 	const char *pKeyName = Input()->KeyName(Key);
 
-	const CBinds::CBindSlot BindSlot = GameClient()->m_Binds.GetBindSlot(pKeyName);
-	const char *pBind = GameClient()->m_Binds.m_aapKeyBindings[BindSlot.m_ModifierMask][BindSlot.m_Key];
+	const CBindSlot BindSlot = GameClient()->m_Binds.GetBindSlot(pKeyName);
+	const char *pBind = GameClient()->m_Binds.GetKeyBinding(BindSlot.m_ModifierMask, BindSlot.m_Key);
 	str_copy(g_Config.m_ClGoresModeSaved, pBind);
 
 	GameClient()->m_Binds.Bind(Key, "+fire;+prevweapon");
@@ -458,68 +453,6 @@ void CEClient::NotifyOnMove()
 	m_LastPos = LocalPos;
 }
 
-void CEClient::RemoveWarEntryDuplicates(const char *pName)
-{
-	if(!str_comp(pName, ""))
-		return;
-
-	for(auto it = m_TempEntries.begin(); it != m_TempEntries.end();)
-	{
-		bool IsDuplicate = !str_comp(it->m_aTempWar, pName) || !str_comp(it->m_aTempHelper, pName) || !str_comp(it->m_aTempMute, pName);
-
-		if(IsDuplicate)
-		{
-			it = m_TempEntries.erase(it);
-		}
-		else
-			++it;
-	}
-	UpdateTempPlayers();
-}
-
-void CEClient::RemoveWarEntry(int Type, const char *pName)
-{
-	CTempEntry Entry(Type, pName, "");
-	auto it = std::find(m_TempEntries.begin(), m_TempEntries.end(), Entry);
-	if(it != m_TempEntries.end())
-		m_TempEntries.erase(it);
-
-	UpdateTempPlayers();
-}
-
-void CEClient::UpdateTempPlayers()
-{
-	for(int i = 0; i < MAX_CLIENTS; ++i)
-	{
-		if(!GameClient()->m_aClients[i].m_Active)
-			continue;
-
-		m_TempPlayers[i].IsTempWar = false;
-		m_TempPlayers[i].IsTempHelper = false;
-		m_TempPlayers[i].IsTempMute = false;
-		memset(m_TempPlayers[i].m_aReason, 0, sizeof(m_TempPlayers[i].m_aReason));
-
-		for(CTempEntry &Entry : m_TempEntries)
-		{
-			if(!str_comp(GameClient()->m_aClients[i].m_aName, Entry.m_aTempWar) && str_comp(Entry.m_aTempWar, "") != 0)
-			{
-				str_copy(m_TempPlayers[i].m_aReason, Entry.m_aReason);
-				m_TempPlayers[i].IsTempWar = true;
-			}
-			if(!str_comp(GameClient()->m_aClients[i].m_aName, Entry.m_aTempHelper) && str_comp(Entry.m_aTempHelper, "") != 0)
-			{
-				str_copy(m_TempPlayers[i].m_aReason, Entry.m_aReason);
-				m_TempPlayers[i].IsTempHelper = true;
-			}
-			if(!str_comp(GameClient()->m_aClients[i].m_aName, Entry.m_aTempMute) && str_comp(Entry.m_aTempMute, "") != 0)
-			{
-				str_copy(m_TempPlayers[i].m_aReason, Entry.m_aReason);
-				m_TempPlayers[i].IsTempMute = true;
-			}
-		}
-	}
-}
-
 void CEClient::UpdateRainbow()
 {
 	static bool m_RainbowWasOn = false;
@@ -593,15 +526,6 @@ void CEClient::OnShutdown()
 		g_Config.m_ClPlayerColorBody = g_Config.m_ClSavedPlayerColorBody;
 	}
 
-	if(g_Config.m_ClDisableGoresOnShutdown)
-	{
-		g_Config.m_ClGoresMode = 0;
-		int Key = g_Config.m_ClGoresModeKey;
-		if(Key < KEY_FIRST || Key >= KEY_LAST)
-			return;
-		GameClient()->m_Binds.Bind(Key, g_Config.m_ClGoresModeSaved);
-	}
-
 	g_Config.m_ClKillCounter = m_KillCount;
 }
 
@@ -613,16 +537,13 @@ void CEClient::OnInit()
 	m_LastMovement = 0;
 
 	m_JoinedTeam = false;
-	m_AttempedJoinTeam = false;
+	m_AttemptedJoinTeam = false;
 
 	// Rainbow
 	m_RainbowColor[0] = g_Config.m_ClPlayerColorBody;
 
 	// Dummy Rainbow
 	m_RainbowColor[1] = g_Config.m_ClDummyColorBody;
-
-	if(g_Config.m_ClDisableGoresOnShutdown)
-		GoresModeSave();
 
 	// Set Kill Counter
 	m_KillCount = g_Config.m_ClKillCounter;
@@ -637,7 +558,6 @@ void CEClient::OnInit()
 
 void CEClient::OnNewSnapshot()
 {
-	UpdateTempPlayers();
 	NotifyOnMove();
 }
 
@@ -647,7 +567,7 @@ void CEClient::OnStateChange(int NewState, int OldState)
 	{
 		m_SentKill = false;
 		m_JoinedTeam = false;
-		m_AttempedJoinTeam = false;
+		m_AttemptedJoinTeam = false;
 		m_LastReplyId = -1;
 		m_aLastPing = CLastPing();
 	}
@@ -658,7 +578,7 @@ void CEClient::OnStateChange(int NewState, int OldState)
 		Client()->GetServerInfo(&CurrentServerInfo);
 
 		m_FoxNetServer = false;
-		if(!str_comp(CurrentServerInfo.m_aGameType, "FoxNetwork"))
+		if(!str_comp(CurrentServerInfo.m_aGameType, "FoxNet"))
 			m_FoxNetServer = true;
 	}
 }

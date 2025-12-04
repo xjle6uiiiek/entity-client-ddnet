@@ -213,13 +213,32 @@ void CPlayers::RenderHookCollLine(
 
 	const int MaxHookTicks = 5 * Client()->GameTickSpeed(); // calculating above 5 seconds is very expensive and unlikely to happen
 
+	auto AddHookPlayerSegment = [&](const vec2 &StartPos, const vec2 &EndPos, const vec2 &HookablePlayerPosition, const vec2 &HitPos) {
+		HookCollColor = color_cast<ColorRGBA>(ColorHSLA(g_Config.m_ClHookCollColorTeeColl));
+
+		// stop hookline at player circle so it looks better
+		vec2 aIntersections[2];
+		int NumIntersections = intersect_line_circle(StartPos, EndPos, HookablePlayerPosition, CCharacterCore::PhysicalSize() * 1.45f / 2.0f, aIntersections);
+		if(NumIntersections == 2)
+		{
+			if(distance(Position, aIntersections[0]) < distance(Position, aIntersections[1]))
+				vLineSegments.emplace_back(StartPos, aIntersections[0]);
+			else
+				vLineSegments.emplace_back(StartPos, aIntersections[1]);
+		}
+		else if(NumIntersections == 1)
+			vLineSegments.emplace_back(StartPos, aIntersections[0]);
+		else
+			vLineSegments.emplace_back(StartPos, HitPos);
+	};
+
 	// simulate the hook into the future
 	int HookTick;
 	bool HookEnteredTelehook = false;
 	for(HookTick = 0; HookTick < MaxHookTicks; ++HookTick)
 	{
 		int Tele;
-		vec2 HitPos;
+		vec2 HitPos, IntersectedPlayerPosition;
 		vec2 SegmentEndPos = SegmentStartPos + QuantizedDirection * HookFireSpeed;
 
 		// check if a hook would enter retracting state in this tick
@@ -229,10 +248,9 @@ void CPlayers::RenderHookCollLine(
 			if(!HookEnteredTelehook)
 			{
 				vec2 RetractingHookEndPos = BasePos + normalize(SegmentEndPos - BasePos) * HookLength;
-				if(GameClient()->IntersectCharacter(SegmentStartPos, RetractingHookEndPos, HitPos, ClientId) != -1)
+				if(GameClient()->IntersectCharacter(SegmentStartPos, RetractingHookEndPos, HitPos, ClientId, &IntersectedPlayerPosition) != -1)
 				{
-					HookCollColor = color_cast<ColorRGBA>(ColorHSLA(g_Config.m_ClHookCollColorTeeColl));
-					vLineSegments.emplace_back(LineStartPos, HitPos);
+					AddHookPlayerSegment(LineStartPos, SegmentEndPos, IntersectedPlayerPosition, HitPos);
 					break;
 				}
 			}
@@ -246,10 +264,9 @@ void CPlayers::RenderHookCollLine(
 		int Hit = Collision()->IntersectLineTeleHook(SegmentStartPos, SegmentEndPos, &HitPos, nullptr, &Tele);
 
 		// check if we intersect a player
-		if(GameClient()->IntersectCharacter(SegmentStartPos, HitPos, SegmentEndPos, ClientId) != -1)
+		if(GameClient()->IntersectCharacter(SegmentStartPos, HitPos, SegmentEndPos, ClientId, &IntersectedPlayerPosition) != -1)
 		{
-			HookCollColor = color_cast<ColorRGBA>(ColorHSLA(g_Config.m_ClHookCollColorTeeColl));
-			vLineSegments.emplace_back(LineStartPos, SegmentEndPos);
+			AddHookPlayerSegment(LineStartPos, HitPos, IntersectedPlayerPosition, SegmentEndPos);
 			break;
 		}
 
@@ -490,6 +507,8 @@ void CPlayers::RenderPlayer(
 
 	if(ClientId == -2) // ghost
 		Alpha = g_Config.m_ClRaceGhostAlpha / 100.0f;
+	// TODO: snd_game_volume_others
+	const float Volume = 1.0f;
 
 	// set size
 	RenderInfo.m_Size = 64.0f;
@@ -588,7 +607,7 @@ void CPlayers::RenderPlayer(
 
 	// do skidding
 	if(!InAir && WantOtherDir && length(Vel * 50) > 500.0f)
-		GameClient()->m_Effects.SkidTrail(Position, Vel, Player.m_Direction, Alpha);
+		GameClient()->m_Effects.SkidTrail(Position, Vel, Player.m_Direction, Alpha, Volume);
 
 	// draw gun
 	if(Player.m_Weapon >= 0)
@@ -1046,11 +1065,6 @@ void CPlayers::OnRender()
 					Color = GameClient()->m_WarList.GetNameplateColor(i);
 				else if(GameClient()->m_WarList.GetWarData(i).IsWarClan)
 					Color = GameClient()->m_WarList.GetClanColor(i);
-
-				if(GameClient()->m_EClient.m_TempPlayers[i].IsTempWar)
-					Color = GameClient()->m_WarList.m_WarTypes[1]->m_Color;
-				else if(GameClient()->m_EClient.m_TempPlayers[i].IsTempHelper)
-					Color = GameClient()->m_WarList.m_WarTypes[3]->m_Color;
 			}
 
 			if(g_Config.m_ClSweatModeSelfColor && (Local || Dummy))
@@ -1295,7 +1309,7 @@ void CPlayers::RenderEffects(const bool Frozen, const bool Local, const vec2 Bod
 		}
 		else if(g_Config.m_ClEffect == EFFECT_FIRETRAIL && (abs(Vel.x) > 0.15f || abs(Vel.y) > 0.15f))
 		{
-			GameClient()->m_Effects.FireTrailEffet(BodyPos, Alpha);
+			GameClient()->m_Effects.FireTrailEffect(BodyPos, Alpha);
 		}
 		else if(g_Config.m_ClEffect == EFFECT_SWITCH && !Frozen)
 		{
@@ -1316,8 +1330,8 @@ void CPlayers::RenderEffects(const bool Frozen, const bool Local, const vec2 Bod
 				Sin = round_to_int(random_float(3.0f, 6.0f));
 				Change = time_get() + time_freq() * 15;
 			}
-			GameClient()->m_Effects.SwitchEffet(EffectPos + Move, ColorRGBA(0.7f, 0.7f, 0.3f), mix(0.6f, 0.0f, minimum(0.2f, maximum(0.0f, Alpha))));
-			GameClient()->m_Effects.SwitchEffet(EffectPos - Move, ColorRGBA(0.3f, 0.4f, 0.7f), mix(0.6f, 0.0f, minimum(0.2f, maximum(0.0f, Alpha))));
+			GameClient()->m_Effects.SwitchEffect(EffectPos + Move, ColorRGBA(0.7f, 0.7f, 0.3f), mix(0.6f, 0.0f, minimum(0.2f, maximum(0.0f, Alpha))));
+			GameClient()->m_Effects.SwitchEffect(EffectPos - Move, ColorRGBA(0.3f, 0.4f, 0.7f), mix(0.6f, 0.0f, minimum(0.2f, maximum(0.0f, Alpha))));
 		}
 	}
 }

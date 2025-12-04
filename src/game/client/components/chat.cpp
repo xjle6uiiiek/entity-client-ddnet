@@ -558,6 +558,12 @@ void CChat::OnMessage(int MsgType, void *pRawMsg)
 		*/
 
 		AddLine(pMsg->m_ClientId, pMsg->m_Team, pMsg->m_pMessage);
+
+		if(Client()->State() != IClient::STATE_DEMOPLAYBACK &&
+			pMsg->m_ClientId == SERVER_MSG)
+		{
+			StoreSave(pMsg->m_pMessage);
+		}
 	}
 	else if(MsgType == NETMSGTYPE_SV_COMMANDINFO)
 	{
@@ -622,18 +628,6 @@ void CChat::StoreSave(const char *pText)
 	char aTimestamp[20];
 	str_timestamp_format(aTimestamp, sizeof(aTimestamp), FORMAT_SPACE);
 
-	// TODO: Find a simple way to get the names of team members. This doesn't
-	// work since team is killed first, then save message gets sent:
-	/*
-	for(int i = 0; i < MAX_CLIENTS; i++)
-	{
-		const CNetObj_PlayerInfo *pInfo = GameClient()->m_Snap.m_paInfoByDDTeam[i];
-		if(!pInfo)
-			continue;
-		pInfo->m_Team // All 0
-	}
-	*/
-
 	const bool SavesFileExists = Storage()->FileExists(SAVES_FILE, IStorage::TYPE_SAVE);
 	IOHANDLE File = Storage()->OpenFile(SAVES_FILE, IOFLAG_APPEND, IStorage::TYPE_SAVE);
 	if(!File)
@@ -686,7 +680,7 @@ void CChat::AddLine(int ClientId, int Team, const char *pLine)
 	ColorRGBA Colors = g_Config.m_ClMessageColor;
 	if(ClientId >= 0 && GameClient()->m_Snap.m_LocalClientId != ClientId)
 	{
-		if((GameClient()->m_WarList.m_WarPlayers[ClientId].IsMuted || GameClient()->m_EClient.m_TempPlayers[ClientId].IsTempMute) && g_Config.m_ClShowMutedInConsole)
+		if(GameClient()->m_WarList.m_WarPlayers[ClientId].IsMuted)
 		{
 			char Message[2048];
 			str_format(Message, sizeof(Message), "[Muted] %s", GameClient()->m_aClients[ClientId].m_aName);
@@ -699,12 +693,10 @@ void CChat::AddLine(int ClientId, int Team, const char *pLine)
 			Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, Message, pLine, Colors);
 			return;
 		}
-		else if(g_Config.m_ClWarList && g_Config.m_ClHideEnemyChat && (GameClient()->m_WarList.GetWarData(ClientId).m_WarGroupMatches[1] || GameClient()->m_EClient.m_TempPlayers[ClientId].IsTempWar))
+		else if(g_Config.m_ClWarList && g_Config.m_ClHideEnemyChat && GameClient()->m_WarList.GetWarData(ClientId).m_WarGroupMatches[1])
 		{
 			char TypeName[512];
-			if(GameClient()->m_EClient.m_TempPlayers[ClientId].IsTempWar)
-				str_format(TypeName, sizeof(TypeName), "%s", GameClient()->m_WarList.m_WarTypes[1]->m_aWarName);
-			else if(GameClient()->m_WarList.GetWarData(ClientId).m_WarGroupMatches[1])
+			if(GameClient()->m_WarList.GetWarData(ClientId).m_WarGroupMatches[1])
 				str_format(TypeName, sizeof(TypeName), "%s", GameClient()->m_WarList.GetWarTypeName(ClientId));
 
 			char Message[2048];
@@ -712,7 +704,10 @@ void CChat::AddLine(int ClientId, int Team, const char *pLine)
 			if(Team == 3)
 				str_format(Message, sizeof(Message), "[%s] ← %s", TypeName, GameClient()->m_aClients[ClientId].m_aName);
 
-			Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, Message, pLine);
+			if(g_Config.m_ClMutedConsoleColor)
+				Colors = color_cast<ColorRGBA>(ColorHSLA(g_Config.m_ClMutedColor));
+
+			Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, Message, pLine, Colors);
 			return;
 		}
 	}
@@ -757,12 +752,6 @@ void CChat::AddLine(int ClientId, int Team, const char *pLine)
 	bool Highlighted = LineHighlighted(ClientId, pLine);
 
 	auto &&FChatMsgCheckAndPrint = [this](const CLine &Line) {
-		if(Line.m_ClientId < 0) // server or client message
-		{
-			if(Client()->State() != IClient::STATE_DEMOPLAYBACK)
-				StoreSave(Line.m_aText);
-		}
-
 		char aBuf[1024];
 		str_format(aBuf, sizeof(aBuf), "%s%s%s", Line.m_aName, Line.m_ClientId >= 0 ? ": " : "", Line.m_aText);
 
@@ -789,20 +778,6 @@ void CChat::AddLine(int ClientId, int Team, const char *pLine)
 		str_format(TypeName, sizeof(TypeName), "[%s]", GameClient()->m_WarList.GetWarTypeName(Line.m_ClientId));
 
 		bool IsWarlist = GameClient()->m_WarList.GetAnyWar(Line.m_ClientId);
-		if(Line.m_ClientId >= 0 && !IsWarlist)
-		{
-			CTempData *pTempData = &GameClient()->m_EClient.m_TempPlayers[Line.m_ClientId];
-			if(pTempData->IsTempHelper)
-			{
-				IsWarlist = true;
-				str_format(TypeName, sizeof(TypeName), "[%s]", GameClient()->m_WarList.m_WarTypes[3]->m_aWarName);
-			}
-			if(pTempData->IsTempWar)
-			{
-				IsWarlist = true;
-				str_format(TypeName, sizeof(TypeName), "[%s]", GameClient()->m_WarList.m_WarTypes[1]->m_aWarName);
-			}
-		}
 
 		const char *pFrom;
 		if(Line.m_Whisper)
@@ -1062,15 +1037,15 @@ void CChat::OnPrepareLines(float y)
 		{
 			if(str_startswith(Line.m_aText, "Team save in progress. You'll be able to load with '/load ") && str_endswith(Line.m_aText, "'"))
 			{
-				pText = "Team save in progress. You'll be able to load with '/load ***'";
+				pText = "Team save in progress. You'll be able to load with '/load *** *** ***'";
 			}
 			else if(str_startswith(Line.m_aText, "Team save in progress. You'll be able to load with '/load") && str_endswith(Line.m_aText, "if it fails"))
 			{
-				pText = "Team save in progress. You'll be able to load with '/load ***' if save is successful or with '/load *** *** ***' if it fails";
+				pText = "Team save in progress. You'll be able to load with '/load *** *** ***' if save is successful or with '/load *** *** ***' if it fails";
 			}
 			else if(str_startswith(Line.m_aText, "Team successfully saved by ") && str_endswith(Line.m_aText, " to continue"))
 			{
-				pText = "Team successfully saved by ***. Use '/load ***' to continue";
+				pText = "Team successfully saved by ***. Use '/load *** *** ***' to continue";
 			}
 		}
 
@@ -1091,7 +1066,7 @@ void CChat::OnPrepareLines(float y)
 				{
 					TextRender()->TextEx(&MeasureCursor, g_Config.m_ClSpecPrefix);
 				}
-				if(g_Config.m_ClWarList && g_Config.m_ClWarlistPrefixes && GameClient()->m_WarList.GetAnyWar(Line.m_ClientId) && !Line.m_Whisper && !GameClient()->m_WarList.m_WarPlayers[Line.m_ClientId].IsMuted && !GameClient()->m_EClient.m_TempPlayers[Line.m_ClientId].IsTempMute) // E-Client
+				if(g_Config.m_ClWarList && g_Config.m_ClWarlistPrefixes && GameClient()->m_WarList.GetAnyWar(Line.m_ClientId) && !Line.m_Whisper && !GameClient()->m_WarList.m_WarPlayers[Line.m_ClientId].IsMuted) // E-Client
 				{
 					TextRender()->TextEx(&MeasureCursor, g_Config.m_ClWarlistPrefix);
 				}
@@ -1542,92 +1517,72 @@ bool CChat::ChatDetection(int ClientId, int Team, const char *pLine)
 		{
 			if(str_find_nocase(pLine, "' changed name to '"))
 			{
-				const char *aName = str_find_nocase(pLine, " '");
-				const char *OldName = str_find_nocase(pLine, "'");
-				const char *NameLength = str_find_nocase(pLine, "' ");
+				char aName[MAX_NAME_LENGTH];
+				char aOldName[MAX_NAME_LENGTH];
 				{
-					using namespace std;
+					const char *pName = str_find_nocase(pLine, " '");
+					const char *pOldName = str_find_nocase(pLine, "'");
+					const char *pNameLength = str_find_nocase(pLine, "' ");
 
-					int n = str_length(aName);
-					string s(aName);
+					int n = str_length(pName);
+					std::string s(pName);
 					s.erase(s.begin() + n - 1);
 					s.erase(s.begin());
 					s.erase(s.begin());
 
-					char name[16];
-					strcpy(name, s.c_str());
+					strcpy(aName, s.c_str());
 
-					int nLength = str_length(OldName) - str_length(NameLength);
-					string oName(OldName);
+					int nLength = str_length(pOldName) - str_length(pNameLength);
+					std::string oName(pOldName);
 					oName.erase(nLength);
 					oName.erase(oName.begin());
 
-					char CharOname[16];
-					strcpy(CharOname, oName.c_str());
-					char aBuf[512];
+					strcpy(aOldName, oName.c_str());
+				}
 
-					int PlayerCid = GameClient()->GetClientId(CharOname);
 
-					if(PlayerCid >= 0)
+				int PlayerCid = GameClient()->GetClientId(aOldName);
+
+				if(PlayerCid >= 0)
+				{
+					char aBuf[128];
+					CWarDataCache Cache = GameClient()->m_WarList.GetWarData(PlayerCid);
+					
+					char aReason[128] = "";
+					str_copy(aReason, aOldName);
+
+					const char *pClan = GameClient()->m_aClients[PlayerCid].m_aClan;
+
+					if(GameClient()->m_WarList.FindWarTypeWithName(aName) == 2)
 					{
-						CWarDataCache *pWarData = &GameClient()->m_WarList.m_WarPlayers[PlayerCid];
-						CTempData *pTempData = &GameClient()->m_EClient.m_TempPlayers[PlayerCid];
-
-						char Reason[128];
-						str_copy(Reason, CharOname);
-						if(str_comp(pTempData->m_aReason, "") != 0)
-							str_copy(Reason, pTempData->m_aReason);
-
-						if(GameClient()->m_WarList.FindWarTypeWithName(name) == 2)
+						str_format(aBuf, sizeof(aBuf), "%s changed their name to a Teammates [%s]", aOldName, aName);
+						if(g_Config.m_ClAutoAddOnNameChange == 2)
+							GameClient()->ClientMessage(aBuf);
+					}
+					else
+					{
+						// Skip Wartype None
+						for(size_t WarlistType = 1; WarlistType < GameClient()->m_WarList.m_WarTypes.size(); ++WarlistType)
 						{
-							str_format(aBuf, sizeof(aBuf), "%s changed their name to a Teammates [%s]", CharOname, name);
-							if(g_Config.m_ClAutoAddOnNameChange == 2)
-								GameClient()->ClientMessage(aBuf);
-						}
-						else
-						{
-							if(pWarData->m_WarGroupMatches[1])
+							if(IsFlagSet(g_Config.m_ClAutoAddFlags, WarlistType))
+								continue;
+							const char *pWarName = GameClient()->m_WarList.m_WarTypes[WarlistType]->m_aWarName;
+							
+							if(Cache.m_WarGroupMatches[WarlistType])
 							{
-								GameClient()->m_EClient.TempWar(name, Reason, true);
-								str_format(aBuf, sizeof(aBuf), "Auto Added \"%s\" to Temp War list", name);
-								if(g_Config.m_ClAutoAddOnNameChange == 2)
-									GameClient()->ClientMessage(aBuf);
-							}
-							else if(pWarData->m_WarGroupMatches[3])
-							{
-								GameClient()->m_EClient.TempHelper(name, Reason, true);
-								str_format(aBuf, sizeof(aBuf), "Auto Added \"%s\" to Temp Helper list", name);
-								if(g_Config.m_ClAutoAddOnNameChange == 2)
-									GameClient()->ClientMessage(aBuf);
-							}
-							else if(pTempData->IsTempWar)
-							{
-								if(str_comp(pTempData->m_aReason, "") != 0)
-									str_copy(Reason, pTempData->m_aReason);
-
-								GameClient()->m_EClient.TempWar(name, Reason, true);
-								str_format(aBuf, sizeof(aBuf), "Auto Added \"%s\" to Temp War list", name);
-								if(g_Config.m_ClAutoAddOnNameChange == 2)
-									GameClient()->ClientMessage(aBuf);
-							}
-							else if(pTempData->IsTempHelper)
-							{
-								if(str_comp(pTempData->m_aReason, "") != 0)
-									str_copy(Reason, pTempData->m_aReason);
-
-								GameClient()->m_EClient.TempHelper(name, Reason, true);
-								str_format(aBuf, sizeof(aBuf), "Auto Added \"%s\" to Temp Helper list", name);
+								GameClient()->m_WarList.AddWarEntry(aName, "", aReason, pWarName, true);
+								str_format(aBuf, sizeof(aBuf), "Auto Added \"%s\" to Temp '%s' list", aName, pWarName);
 								if(g_Config.m_ClAutoAddOnNameChange == 2)
 									GameClient()->ClientMessage(aBuf);
 							}
 						}
-						if(pWarData->IsMuted || pTempData->IsTempMute)
-						{
-							GameClient()->m_EClient.TempMute(name, true);
-							str_format(aBuf, sizeof(aBuf), "Auto Added \"%s\" to Temp Mute list", name);
-							if(g_Config.m_ClAutoAddOnNameChange == 2)
-								GameClient()->ClientMessage(aBuf);
-						}
+					}
+					if(Cache.IsMuted)
+					{
+						GameClient()->m_WarList.AddMute(aName, true, true);
+						str_format(aBuf, sizeof(aBuf), "Auto Added \"%s\" to Temp Mute list", aName);
+						if(g_Config.m_ClAutoAddOnNameChange == 2)
+							GameClient()->ClientMessage(aBuf);
 					}
 				}
 			}
@@ -1639,11 +1594,10 @@ bool CChat::ChatDetection(int ClientId, int Team, const char *pLine)
 			{
 				const char *PName = str_find_nocase(pLine, "'");
 				const char *NameLength = str_find_nocase(pLine, "' ");
-				using namespace std;
 				if(str_find_nocase(pLine, g_Config.m_ClAutoJoinTeamName))
 				{
 					int nLength = str_length(PName) - str_length(NameLength);
-					string Name(PName);
+					std::string Name(PName);
 					Name.erase(nLength);
 					Name.erase(Name.begin());
 
@@ -1718,11 +1672,14 @@ bool CChat::ChatDetection(int ClientId, int Team, const char *pLine)
 			if(str_find_nocase(pLine, "bro, check out this client") && Team == TEAM_WHISPER_RECV) // whisper advertising
 				AdBotFound = true;
 
-			// rit sometimes sends "hink" instead of "think"
-			if(str_find_nocase(pLine, "hink you could do better") && str_find_nocase(pLine, "Not without"))
+			if(str_find_nocase(pLine, "you could do better") && str_find_nocase(pLine, "Not without"))
 			{
 				// try to not remove their message if they are just trying to be funny
-				if(!str_find_nocase(pLine, "github.com") && !str_find_nocase(pLine, "tater") && !str_find_nocase(pLine, "tclient") && !str_find_nocase(pLine, "t-client") && !str_find_nocase(pLine, "tclient.app") && !str_find_nocase(pLine, "aiodob") && !str_find_nocase(pLine, "a-client") && !str_find(pLine, "A Client") && !str_find(pLine, "A client") && !str_find_nocase(pLine, "entity") && !str_find_nocase(pLine, "e-client") && !str_find_nocase(pLine, "eclient") && !str_find_nocase(pLine, "chillerbot") && !str_find_nocase(pLine, "cactus"))
+				if(!str_find_nocase(pLine, "github.com") && !str_find_nocase(pLine, "ddnet") &&
+					!str_find_nocase(pLine, "tater") &&  !str_find_nocase(pLine, "tclient") && !str_find_nocase(pLine, "t-client") && !str_find_nocase(pLine, "tclient.app") &&
+					!str_find_nocase(pLine, "aiodob") && !str_find_nocase(pLine, "a-client") && !str_find(pLine, "A Client") && !str_find(pLine, "A client") &&
+					!str_find_nocase(pLine, "entity") && !str_find_nocase(pLine, "e-client") && !str_find_nocase(pLine, "eclient") &&
+					!str_find_nocase(pLine, "chillerbot") && !str_find_nocase(pLine, "cactus"))
 					AdBotFound = true;
 				if(str_find(pLine, " ")) // This is the little white space it uses between some letters
 					AdBotFound = true;
@@ -1730,7 +1687,7 @@ bool CChat::ChatDetection(int ClientId, int Team, const char *pLine)
 
 			if(AdBotFound == true)
 			{
-				// This is done so that when a player forwards a message of another player sending a krx message it wont start a vote for the forwarder
+				// Forwarding the message
 				if(str_find_nocase(pLine, "← "))
 					return false;
 

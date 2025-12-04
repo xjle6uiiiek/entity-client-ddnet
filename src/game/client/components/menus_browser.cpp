@@ -336,21 +336,6 @@ void CMenus::RenderServerbrowserServerList(CUIRect View, bool &WasListboxItemAct
 
 			const int Id = Col.m_Id;
 
-			bool FoxNet = false;
-			{
-				using namespace std;
-				const char *aName = str_find_nocase(pItem->m_aAddress, ":");
-
-				int n = str_length(pItem->m_aAddress) - str_length(aName);
-				string ServerIp(pItem->m_aAddress);
-				ServerIp.erase(n);
-
-				if(!str_comp(ServerIp.c_str(), "85.215.138.194"))
-				{
-					FoxNet = true;
-				}
-			}
-
 			if(Id == COL_FLAG_LOCK)
 			{
 				if(pItem->m_Flags & SERVER_FLAG_PASSWORD)
@@ -365,31 +350,11 @@ void CMenus::RenderServerbrowserServerList(CUIRect View, bool &WasListboxItemAct
 			else if(Id == COL_FLAG_FAV)
 			{
 				if(pItem->m_Favorite != TRISTATE::NONE)
-				{
-					if(FoxNet)
-						RenderBrowserIcons(*pUiElement->Rect(UI_ELEM_FAVORITE_ICON), &Button, ColorRGBA(0.25f, 0.55f, 0.85f, 1.0f), TextRender()->DefaultTextOutlineColor(), FONT_ICON_STAR, TEXTALIGN_MC);
-					else
-						RenderBrowserIcons(*pUiElement->Rect(UI_ELEM_FAVORITE_ICON), &Button, ColorRGBA(1.0f, 0.85f, 0.3f, 1.0f), TextRender()->DefaultTextOutlineColor(), FONT_ICON_STAR, TEXTALIGN_MC);
-				}
+					RenderBrowserIcons(*pUiElement->Rect(UI_ELEM_FAVORITE_ICON), &Button, ColorRGBA(1.0f, 0.85f, 0.3f, 1.0f), TextRender()->DefaultTextOutlineColor(), FONT_ICON_STAR, TEXTALIGN_MC);
 			}
 			else if(Id == COL_COMMUNITY)
-			{
-				if(FoxNet)
-				{
-					CUIRect FoxRect;
-					Button.Margin(2.0f, &FoxRect);
-
-					FoxRect.VMargin(FoxRect.w / 2.0f - FoxRect.h, &FoxRect);
-
-					Graphics()->TextureSet(g_pData->m_aImages[IMAGE_FOXNET_FLAGS].m_Id);
-					Graphics()->QuadsBegin();
-					Graphics()->SetColor(1.0f, 1.0f, 1.0f, 1.0f);
-					Graphics()->SelectSprite(SPRITE_FOXNET_FLAG0);
-					IGraphics::CQuadItem QuadItem(FoxRect.x, FoxRect.y, FoxRect.w, FoxRect.h);
-					Graphics()->QuadsDrawTL(&QuadItem, 1);
-					Graphics()->QuadsEnd();
-				}
-				else if(pCommunity != nullptr)
+			{	
+				if(pCommunity != nullptr)
 				{
 					const CCommunityIcon *pIcon = m_CommunityIcons.Find(pCommunity->Id());
 					if(pIcon != nullptr)
@@ -802,9 +767,7 @@ void CMenus::RenderServerbrowserFilters(CUIRect View)
 		const float OldWidth = Flag.w;
 		Flag.w = Flag.h * 2.0f;
 		Flag.x += (OldWidth - Flag.w) / 2.0f;
-		GameClient()->m_CountryFlags.Render(g_Config.m_BrFilterCountryIndex, ColorRGBA(1.0f, 1.0f, 1.0f, Ui()->HotItem() == &g_Config.m_BrFilterCountryIndex ? 1.0f : g_Config.m_BrFilterCountry ? 0.9f :
-																									   0.5f),
-			Flag.x, Flag.y, Flag.w, Flag.h);
+		GameClient()->m_CountryFlags.Render(g_Config.m_BrFilterCountryIndex, ColorRGBA(1.0f, 1.0f, 1.0f, Ui()->HotItem() == &g_Config.m_BrFilterCountryIndex ? 1.0f : (g_Config.m_BrFilterCountry ? 0.9f : 0.5f)), Flag.x, Flag.y, Flag.w, Flag.h);
 
 		if(Ui()->DoButtonLogic(&g_Config.m_BrFilterCountryIndex, 0, &Flag, BUTTONFLAG_LEFT))
 		{
@@ -1551,8 +1514,7 @@ void CMenus::RenderServerbrowserFriends(CUIRect View)
 			str_format(aBuf, sizeof(aBuf), Localize("Offline (%d)", "friends (server browser)"), (int)m_avFriends[FriendType].size());
 			break;
 		default:
-			dbg_assert(false, "FriendType invalid");
-			break;
+			dbg_assert_failed("FriendType invalid");
 		}
 		Ui()->DoLabel(&GroupLabel, aBuf, FontSize, TEXTALIGN_ML);
 		if(Ui()->DoButtonLogic(&s_aListExtended[FriendType], 0, &Header, BUTTONFLAG_LEFT))
@@ -1645,41 +1607,9 @@ void CMenus::RenderServerbrowserFriends(CUIRect View)
 				// server info
 				if(Friend.ServerInfo())
 				{
-					bool FoxNet = false;
-					{
-						using namespace std;
-						const char *aName = str_find_nocase(Friend.ServerInfo()->m_aAddress, ":");
-
-						int n = str_length(Friend.ServerInfo()->m_aAddress) - str_length(aName);
-						string ServerIp(Friend.ServerInfo()->m_aAddress);
-						ServerIp.erase(n);
-
-						if(!str_comp(ServerIp.c_str(), "85.215.138.194"))
-						{
-							FoxNet = true;
-						}
-					}
-
 					// community icon
 					const CCommunity *pCommunity = ServerBrowser()->Community(Friend.ServerInfo()->m_aCommunityId);
-					if(FoxNet)
-					{
-						CUIRect FoxRect;
-						InfoLabel.VSplitLeft(21.0f, &FoxRect, &InfoLabel);
-						InfoLabel.VSplitLeft(2.0f, nullptr, &InfoLabel);
-
-						FoxRect.VMargin(FoxRect.w / 2.0f - FoxRect.h, &FoxRect);
-
-						Graphics()->TextureSet(g_pData->m_aImages[IMAGE_FOXNET_FLAGS].m_Id);
-						Graphics()->QuadsBegin();
-						Graphics()->SetColor(1.0f, 1.0f, 1.0f, 1.0f);
-						Graphics()->SelectSprite(SPRITE_FOXNET_FLAG0);
-						
-						IGraphics::CQuadItem QuadItem(FoxRect.x, FoxRect.y, FoxRect.w, FoxRect.h);
-						Graphics()->QuadsDrawTL(&QuadItem, 1);
-						Graphics()->QuadsEnd();
-					}
-					else if(pCommunity != nullptr)
+					if(pCommunity != nullptr)
 					{
 						const CCommunityIcon *pIcon = m_CommunityIcons.Find(pCommunity->Id());
 						if(pIcon != nullptr)
@@ -1888,8 +1818,7 @@ void CMenus::RenderServerbrowserToolBox(CUIRect ToolBox)
 		RenderServerbrowserFriends(ToolBox);
 		return;
 	default:
-		dbg_assert(false, "ui_toolbox_page invalid");
-		return;
+		dbg_assert_failed("ui_toolbox_page invalid");
 	}
 }
 
@@ -1916,9 +1845,10 @@ void CMenus::RenderServerbrowser(CUIRect MainView)
 		GameClient()->m_MenuBackground.ChangePosition(g_Config.m_UiPage - PAGE_FAVORITE_COMMUNITY_1 + CMenuBackground::POS_BROWSER_CUSTOM0);
 		break;
 	default:
-		dbg_assert(false, "ui_page invalid for RenderServerbrowser");
+		dbg_assert_failed("ui_page invalid for RenderServerbrowser");
 	}
 
+	// clang-format off
 	/*
 		+---------------------------+ +---communities---+
 		|                           | |                 |
@@ -1929,6 +1859,7 @@ void CMenus::RenderServerbrowser(CUIRect MainView)
 		+---------------------------+ |                 |
 			    status box            +-----------------+
 	*/
+	// clang-format on
 
 	CUIRect ServerList, StatusBox, ToolBox, TabBar;
 	MainView.Draw(ms_ColorTabbarActive, IGraphics::CORNER_B, 10.0f);
@@ -1955,10 +1886,10 @@ void CMenus::RenderServerbrowser(CUIRect MainView)
 	RenderServerbrowserToolBox(ToolBox);
 
 	// E-Client
-	if(!ServerBrowser()->IsRefreshing() && !ServerBrowser()->IsGettingServerlist() && !m_WarlistInitalized)
+	if(!ServerBrowser()->IsRefreshing() && !ServerBrowser()->IsGettingServerlist() && !m_WarlistInitialized)
 	{
 		UpdateWarlistCache();
-		m_WarlistInitalized = true;
+		m_WarlistInitialized = true;
 	}
 }
 
@@ -2122,9 +2053,9 @@ void CMenus::RenderWarlistPlayers(CUIRect &View, CUIRect &List, CScrollRegion &S
 	const float FontSize = 10.0f;
 	const float SpacingH = 2.0f; 
 
-	CUIRect ExtaSpace;
-	List.HSplitTop(5.0f, &ExtaSpace, &List);
-	ScrollRegion.AddRect(ExtaSpace);
+	CUIRect ExtraSpace;
+	List.HSplitTop(5.0f, &ExtraSpace, &List);
+	ScrollRegion.AddRect(ExtraSpace);
 
 	static std::vector<int> s_aWarListExtended;
 
@@ -2239,40 +2170,9 @@ void CMenus::RenderWarlistPlayers(CUIRect &View, CUIRect &List, CScrollRegion &S
 			// clan
 			Ui()->DoLabel(&ClanLabel, Entry.Clan(), FontSize - 2.0f, TEXTALIGN_ML);
 
-			bool FoxNet = false;
-			{
-				using namespace std;
-				const char *aName = str_find_nocase(Entry.m_aAddress, ":");
-
-				int n = str_length(Entry.m_aAddress) - str_length(aName);
-				string ServerIp(Entry.m_aAddress);
-				ServerIp.erase(n);
-
-				if(!str_comp(ServerIp.c_str(), "85.215.138.194"))
-				{
-					FoxNet = true;
-				}
-			}
-
 			// community icon
 			const CCommunity *pCommunity = ServerBrowser()->Community(Entry.m_aCommunityId);
-			if(FoxNet)
-			{
-				CUIRect FoxRect;
-				InfoLabel.VSplitLeft(21.0f, &FoxRect, &InfoLabel);
-				InfoLabel.VSplitLeft(2.0f, nullptr, &InfoLabel);
-
-				FoxRect.VMargin(FoxRect.w / 2.0f - FoxRect.h, &FoxRect);
-
-				Graphics()->TextureSet(g_pData->m_aImages[IMAGE_FOXNET_FLAGS].m_Id);
-				Graphics()->QuadsBegin();
-				Graphics()->SetColor(1.0f, 1.0f, 1.0f, 1.0f);
-				Graphics()->SelectSprite(SPRITE_FOXNET_FLAG0);
-				IGraphics::CQuadItem QuadItem(FoxRect.x, FoxRect.y, FoxRect.w, FoxRect.h);
-				Graphics()->QuadsDrawTL(&QuadItem, 1);
-				Graphics()->QuadsEnd();
-			}
-			else if(pCommunity != nullptr)
+			if(pCommunity != nullptr)
 			{
 				const CCommunityIcon *pIcon = m_CommunityIcons.Find(pCommunity->Id());
 				if(pIcon != nullptr)

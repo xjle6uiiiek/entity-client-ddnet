@@ -44,6 +44,7 @@
 #include "components/freezebars.h"
 #include "components/ghost.h"
 #include "components/hud.h"
+#include "components/important_alert.h"
 #include "components/infomessages.h"
 #include "components/items.h"
 #include "components/key_binder.h"
@@ -86,6 +87,7 @@
 #include "components/tclient/skinprofiles.h"
 #include "components/tclient/statusbar.h"
 #include "components/tclient/warlist.h"
+#include "components/tclient/custom_communities.h"
 
 class CGameInfo
 {
@@ -169,6 +171,7 @@ public:
 	CCountryFlags m_CountryFlags;
 	CFlow m_Flow;
 	CHud m_Hud;
+	CImportantAlert m_ImportantAlert;
 	CDebugHud m_DebugHud;
 	CControls m_Controls;
 	CEffects m_Effects;
@@ -219,6 +222,7 @@ public:
 	CSkinProfiles m_SkinProfiles;
 	CStatusBar m_StatusBar;
 	CWarList m_WarList;
+	CCustomCommunities m_CustomCommunities;
 
 private:
 	std::vector<class CComponent *> m_vpAll;
@@ -371,6 +375,7 @@ public:
 		const CNetObj_PlayerInfo *m_pLocalInfo;
 		const CNetObj_SpectatorInfo *m_pSpectatorInfo;
 		const CNetObj_SpectatorInfo *m_pPrevSpectatorInfo;
+		const CNetObj_SpectatorCount *m_pSpectatorCount;
 		int m_NumFlags;
 		const CNetObj_Flag *m_apFlags[CSnapshot::MAX_ITEMS];
 		const CNetObj_Flag *m_apPrevFlags[CSnapshot::MAX_ITEMS];
@@ -402,7 +407,6 @@ public:
 			float m_Zoom;
 			int m_Deadzone;
 			int m_FollowFactor;
-			int m_SpectatorCount;
 		};
 		CSpectateInfo m_SpecInfo;
 
@@ -481,9 +485,6 @@ public:
 		int m_Emoticon;
 		float m_EmoticonStartFraction;
 		int m_EmoticonStartTick;
-
-		// FoxNet
-		bool m_ExplosionGun;
 
 		bool m_Solo;
 		bool m_Jetpack;
@@ -607,12 +608,12 @@ public:
 		{
 			m_Active = true;
 			m_JoinTick = Tick;
-		};
+		}
 		void JoinSpec(int Tick)
 		{
 			m_Active = false;
 			m_IngameTicks += Tick - m_JoinTick;
-		};
+		}
 		int GetIngameTicks(int Tick) const { return m_IngameTicks + Tick - m_JoinTick; }
 		float GetFPM(int Tick, int TickSpeed) const { return (float)(m_Frags * TickSpeed * 60) / GetIngameTicks(Tick); }
 	};
@@ -663,6 +664,8 @@ public:
 	void OnLanguageChange();
 	void HandleLanguageChanged();
 
+	void ForceUpdateConsoleRemoteCompletionSuggestions() override;
+
 	void RefreshSkin(const std::shared_ptr<CManagedTeeRenderInfo> &pManagedTeeRenderInfo);
 	void RefreshSkins(int SkinDescriptorFlags);
 	void OnSkinUpdate(const char *pSkinName);
@@ -695,7 +698,7 @@ public:
 	void SendKill() const;
 	void SendReadyChange7();
 
-	int m_NextChangeInfo;
+	int m_aNextChangeInfo[NUM_DUMMIES];
 
 	// DDRace
 
@@ -707,7 +710,7 @@ public:
 
 	class CTeamsCore m_Teams;
 
-	int IntersectCharacter(vec2 HookPos, vec2 NewPos, vec2 &NewPos2, int OwnId);
+	int IntersectCharacter(vec2 HookPos, vec2 NewPos, vec2 &NewPos2, int OwnId, vec2 *pPlayerPosition = nullptr);
 
 	int LastRaceTick() const;
 	int CurrentRaceTime() const;
@@ -951,6 +954,7 @@ private:
 
 	bool m_aDDRaceMsgSent[NUM_DUMMIES];
 	int m_aShowOthers[NUM_DUMMIES];
+	int m_aEnableSpectatorCount[NUM_DUMMIES]; // current setting as sent to the server, -1 if not yet sent
 
 	std::vector<std::shared_ptr<CManagedTeeRenderInfo>> m_vpManagedTeeRenderInfos;
 	void UpdateManagedTeeRenderInfos();
@@ -972,7 +976,7 @@ private:
 	CMapBugs m_MapBugs;
 
 	// tunings for every zone on the map, 0 is a global tune
-	CTuningParams m_aTuningList[NUM_TUNEZONES];
+	CTuningParams m_aTuningList[TuneZone::NUM];
 	CTuningParams *TuningList() { return m_aTuningList; }
 
 	float m_LastShowDistanceZoom;

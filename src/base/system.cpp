@@ -235,8 +235,7 @@ IOHANDLE io_open(const char *filename, int flags)
 	}
 	else
 	{
-		dbg_assert(false, "logic error");
-		return nullptr;
+		dbg_assert_failed("logic error");
 	}
 	HANDLE handle = CreateFileW(wide_filename.c_str(), desired_access, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, creation_disposition, FILE_ATTRIBUTE_NORMAL, nullptr);
 	if(handle == INVALID_HANDLE_VALUE)
@@ -262,8 +261,7 @@ IOHANDLE io_open(const char *filename, int flags)
 	}
 	else
 	{
-		dbg_assert(false, "logic error");
-		return nullptr;
+		dbg_assert_failed("Invalid flags: %d", flags);
 	}
 	return fopen(filename, open_mode);
 #endif
@@ -367,8 +365,7 @@ int io_seek(IOHANDLE io, int64_t offset, ESeekOrigin origin)
 		real_origin = SEEK_END;
 		break;
 	default:
-		dbg_assert(false, "origin invalid");
-		return -1;
+		dbg_assert_failed("Invalid origin: %d", origin);
 	}
 #if defined(CONF_FAMILY_WINDOWS)
 	return _fseeki64((FILE *)io, offset, real_origin);
@@ -1206,7 +1203,7 @@ void net_addr_str(const NETADDR *addr, char *string, int max_length, bool add_po
 	}
 	else
 	{
-		dbg_assert(false, "unknown NETADDR type %d", addr->type);
+		dbg_assert_failed("unknown NETADDR type %d", addr->type);
 	}
 }
 
@@ -1653,7 +1650,7 @@ static int priv_net_create_socket(int domain, int type, const NETADDR *bindaddr)
 	}
 	else
 	{
-		dbg_assert(false, "socket type invalid: %d", type);
+		dbg_assert_failed("socket type invalid: %d", type);
 	}
 
 	if(bind(sock, (sockaddr *)&addr, addr_len) != 0)
@@ -2867,31 +2864,33 @@ int64_t time_timestamp()
 	return time(nullptr);
 }
 
-static struct tm *time_localtime_threadlocal(time_t *time_data)
+static tm time_localtime_threadlocal(time_t *time_data)
 {
 #if defined(CONF_FAMILY_WINDOWS)
 	// The result of localtime is thread-local on Windows
 	// https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/localtime-localtime32-localtime64
-	return localtime(time_data);
+	tm *time = localtime(time_data);
 #else
 	// Thread-local buffer for the result of localtime_r
-	thread_local struct tm time_info_buf;
-	return localtime_r(time_data, &time_info_buf);
+	thread_local tm time_info_buf;
+	tm *time = localtime_r(time_data, &time_info_buf);
 #endif
+	dbg_assert(time != nullptr, "Failed to get local time for time data %" PRId64, (int64_t)time_data);
+	return *time;
 }
 
 int time_houroftheday()
 {
 	time_t time_data;
 	time(&time_data);
-	struct tm *time_info = time_localtime_threadlocal(&time_data);
-	return time_info->tm_hour;
+	const tm time_info = time_localtime_threadlocal(&time_data);
+	return time_info.tm_hour;
 }
 
-static bool time_iseasterday(time_t time_data, struct tm *time_info)
+static bool time_iseasterday(time_t time_data, tm time_info)
 {
 	// compute Easter day (Sunday) using https://en.wikipedia.org/w/index.php?title=Computus&oldid=890710285#Anonymous_Gregorian_algorithm
-	int Y = time_info->tm_year + 1900;
+	int Y = time_info.tm_year + 1900;
 	int a = Y % 19;
 	int b = Y / 100;
 	int c = Y % 100;
@@ -2911,8 +2910,8 @@ static bool time_iseasterday(time_t time_data, struct tm *time_info)
 	for(int day_offset = -1; day_offset <= 2; day_offset++)
 	{
 		time_data = time_data + day_offset * 60 * 60 * 24;
-		time_info = time_localtime_threadlocal(&time_data);
-		if(time_info->tm_mon == month - 1 && time_info->tm_mday == day)
+		const tm offset_time_info = time_localtime_threadlocal(&time_data);
+		if(offset_time_info.tm_mon == month - 1 && offset_time_info.tm_mday == day)
 			return true;
 	}
 	return false;
@@ -2922,17 +2921,17 @@ ETimeSeason time_season()
 {
 	time_t time_data;
 	time(&time_data);
-	struct tm *time_info = time_localtime_threadlocal(&time_data);
+	const tm time_info = time_localtime_threadlocal(&time_data);
 
-	if((time_info->tm_mon == 11 && time_info->tm_mday == 31) || (time_info->tm_mon == 0 && time_info->tm_mday == 1))
+	if((time_info.tm_mon == 11 && time_info.tm_mday == 31) || (time_info.tm_mon == 0 && time_info.tm_mday == 1))
 	{
 		return SEASON_NEWYEAR;
 	}
-	else if(time_info->tm_mon == 11 && time_info->tm_mday >= 24 && time_info->tm_mday <= 26)
+	else if(time_info.tm_mon == 11 && time_info.tm_mday >= 24 && time_info.tm_mday <= 26)
 	{
 		return SEASON_XMAS;
 	}
-	else if((time_info->tm_mon == 9 && time_info->tm_mday == 31) || (time_info->tm_mon == 10 && time_info->tm_mday == 1))
+	else if((time_info.tm_mon == 9 && time_info.tm_mday == 31) || (time_info.tm_mon == 10 && time_info.tm_mday == 1))
 	{
 		return SEASON_HALLOWEEN;
 	}
@@ -2941,7 +2940,7 @@ ETimeSeason time_season()
 		return SEASON_EASTER;
 	}
 
-	switch(time_info->tm_mon)
+	switch(time_info.tm_mon)
 	{
 	case 11:
 	case 0:
@@ -2960,8 +2959,7 @@ ETimeSeason time_season()
 	case 10:
 		return SEASON_AUTUMN;
 	default:
-		dbg_assert(false, "Invalid month");
-		dbg_break();
+		dbg_assert_failed("Invalid month: %d", time_info.tm_mon);
 	}
 }
 
@@ -3092,8 +3090,8 @@ int str_utf8_dist_buffer(const char *a_utf8, const char *b_utf8, int *buf, int b
 #endif
 void str_timestamp_ex(time_t time_data, char *buffer, int buffer_size, const char *format)
 {
-	struct tm *time_info = time_localtime_threadlocal(&time_data);
-	strftime(buffer, buffer_size, format, time_info);
+	const tm time_info = time_localtime_threadlocal(&time_data);
+	strftime(buffer, buffer_size, format, &time_info);
 	buffer[buffer_size - 1] = 0; /* assure null termination */
 }
 
@@ -3183,182 +3181,6 @@ int str_time_float(float secs, int format, char *buffer, int buffer_size)
 void net_stats(NETSTATS *stats_inout)
 {
 	*stats_inout = network_stats;
-}
-
-int str_utf8_comp_nocase(const char *a, const char *b)
-{
-	int code_a;
-	int code_b;
-
-	while(*a && *b)
-	{
-		code_a = str_utf8_tolower_codepoint(str_utf8_decode(&a));
-		code_b = str_utf8_tolower_codepoint(str_utf8_decode(&b));
-
-		if(code_a != code_b)
-			return code_a - code_b;
-	}
-	return (unsigned char)*a - (unsigned char)*b;
-}
-
-int str_utf8_comp_nocase_num(const char *a, const char *b, int num)
-{
-	int code_a;
-	int code_b;
-	const char *old_a = a;
-
-	if(num <= 0)
-		return 0;
-
-	while(*a && *b)
-	{
-		code_a = str_utf8_tolower_codepoint(str_utf8_decode(&a));
-		code_b = str_utf8_tolower_codepoint(str_utf8_decode(&b));
-
-		if(code_a != code_b)
-			return code_a - code_b;
-
-		if(a - old_a >= num)
-			return 0;
-	}
-
-	return (unsigned char)*a - (unsigned char)*b;
-}
-
-const char *str_utf8_find_nocase(const char *haystack, const char *needle, const char **end)
-{
-	while(*haystack) /* native implementation */
-	{
-		const char *a = haystack;
-		const char *b = needle;
-		const char *a_next = a;
-		const char *b_next = b;
-		while(*a && *b && str_utf8_tolower_codepoint(str_utf8_decode(&a_next)) == str_utf8_tolower_codepoint(str_utf8_decode(&b_next)))
-		{
-			a = a_next;
-			b = b_next;
-		}
-		if(!(*b))
-		{
-			if(end != nullptr)
-				*end = a_next;
-			return haystack;
-		}
-		str_utf8_decode(&haystack);
-	}
-
-	if(end != nullptr)
-		*end = nullptr;
-	return nullptr;
-}
-
-const char *str_utf8_skip_whitespaces(const char *str)
-{
-	const char *str_old;
-	int code;
-
-	while(*str)
-	{
-		str_old = str;
-		code = str_utf8_decode(&str);
-
-		// check if unicode is not empty
-		if(!str_utf8_isspace(code))
-		{
-			return str_old;
-		}
-	}
-
-	return str;
-}
-
-int str_utf8_forward(const char *str, int cursor)
-{
-	const char *ptr = str + cursor;
-	if(str_utf8_decode(&ptr) == 0)
-	{
-		return cursor;
-	}
-	return ptr - str;
-}
-
-int str_utf8_check(const char *str)
-{
-	int codepoint;
-	while((codepoint = str_utf8_decode(&str)))
-	{
-		if(codepoint == -1)
-		{
-			return 0;
-		}
-	}
-	return 1;
-}
-
-void str_utf8_copy_num(char *dst, const char *src, int dst_size, int num)
-{
-	int new_cursor;
-	int cursor = 0;
-
-	while(src[cursor] && num > 0)
-	{
-		new_cursor = str_utf8_forward(src, cursor);
-		if(new_cursor >= dst_size) // reserve 1 byte for the null termination
-			break;
-		else
-			cursor = new_cursor;
-		--num;
-	}
-
-	str_copy(dst, src, cursor < dst_size ? cursor + 1 : dst_size);
-}
-
-void str_utf8_stats(const char *str, size_t max_size, size_t max_count, size_t *size, size_t *count)
-{
-	const char *cursor = str;
-	*size = 0;
-	*count = 0;
-	while(*size < max_size && *count < max_count)
-	{
-		if(str_utf8_decode(&cursor) == 0)
-		{
-			break;
-		}
-		if((size_t)(cursor - str) >= max_size)
-		{
-			break;
-		}
-		*size = cursor - str;
-		++(*count);
-	}
-}
-
-size_t str_utf8_offset_bytes_to_chars(const char *str, size_t byte_offset)
-{
-	size_t char_offset = 0;
-	size_t current_offset = 0;
-	while(current_offset < byte_offset)
-	{
-		const size_t prev_byte_offset = current_offset;
-		current_offset = str_utf8_forward(str, current_offset);
-		if(current_offset == prev_byte_offset)
-			break;
-		char_offset++;
-	}
-	return char_offset;
-}
-
-size_t str_utf8_offset_chars_to_bytes(const char *str, size_t char_offset)
-{
-	size_t byte_offset = 0;
-	for(size_t i = 0; i < char_offset; i++)
-	{
-		const size_t prev_byte_offset = byte_offset;
-		byte_offset = str_utf8_forward(str, byte_offset);
-		if(byte_offset == prev_byte_offset)
-			break;
-	}
-	return byte_offset;
 }
 
 static_assert(sizeof(unsigned) == 4, "unsigned must be 4 bytes in size");
@@ -3507,8 +3329,7 @@ PROCESS shell_execute(const char *file, EShellExecuteWindowState window_state, c
 		info.nShow = SW_SHOWMINNOACTIVE;
 		break;
 	default:
-		dbg_assert(false, "window_state invalid");
-		dbg_break();
+		dbg_assert_failed("Invalid window_state: %d", static_cast<int>(window_state));
 	}
 	info.fMask = SEE_MASK_NOCLOSEPROCESS;
 	// Save and restore the FPU control word because ShellExecute might change it
@@ -3658,12 +3479,11 @@ static void ensure_secure_random_init()
 		if(!CryptAcquireContext(&secure_random_data.provider, nullptr, nullptr, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT))
 		{
 			const DWORD LastError = GetLastError();
-			dbg_assert(false, "Failed to initialize secure random: CryptAcquireContext failure (%ld '%s')", LastError, windows_format_system_message(LastError).c_str());
-			dbg_break();
+			dbg_assert_failed("Failed to initialize secure random: CryptAcquireContext failure (%ld '%s')", LastError, windows_format_system_message(LastError).c_str());
 		}
 #else
-			secure_random_data.urandom = io_open("/dev/urandom", IOFLAG_READ);
-			dbg_assert(secure_random_data.urandom != nullptr, "Failed to initialize secure random: failed to open /dev/urandom");
+		secure_random_data.urandom = io_open("/dev/urandom", IOFLAG_READ);
+		dbg_assert(secure_random_data.urandom != nullptr, "Failed to initialize secure random: failed to open /dev/urandom");
 #endif
 	});
 }
@@ -3711,8 +3531,7 @@ void secure_random_fill(void *bytes, unsigned length)
 	if(!CryptGenRandom(secure_random_data.provider, length, (unsigned char *)bytes))
 	{
 		const DWORD LastError = GetLastError();
-		dbg_assert(false, "CryptGenRandom failure (%ld '%s')", LastError, windows_format_system_message(LastError).c_str());
-		dbg_break();
+		dbg_assert_failed("CryptGenRandom failure (%ld '%s')", LastError, windows_format_system_message(LastError).c_str());
 	}
 #else
 	dbg_assert(length == io_read(secure_random_data.urandom, bytes, length), "io_read returned with a short read");
