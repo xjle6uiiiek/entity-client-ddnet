@@ -2440,6 +2440,14 @@ void CGameClient::OnPredict()
 		return;
 	}
 
+	// <FoxNet
+	if(Collision()->HasMovingQuads())
+	{
+		Collision()->SetTime((double)(Client()->GetPredictionTick() + 1) / Client()->GameTickSpeed());
+		Collision()->UpdateQuadCache();
+	}
+	// FoxNet>
+
 	vec2 aBeforeRender[MAX_CLIENTS];
 	for(int ClientId = 0; ClientId < MAX_CLIENTS; ClientId++)
 	{
@@ -5071,8 +5079,18 @@ void CGameClient::LoadMapSettings()
 		char *pSettings = (char *)pMap->GetData(pItem->m_Settings);
 		char *pNext = pSettings;
 		Console()->SetUnknownCommandCallback(UnknownMapSettingCallback, nullptr);
+		// <FoxNet
+		g_Config.m_SvMovingTiles = false;
+		g_Config.m_SvTeleGrenade = false;
+
 		while(pNext < pSettings + Size)
 		{
+			if(str_find(pNext, "sv_kog_qquads_enable 1"))
+				g_Config.m_SvMovingTiles = true;
+			if(str_find(pNext, "sv_kog_grenade_tele 1"))
+				g_Config.m_SvTeleGrenade = true;
+			// FoxNet>
+
 			int StrSize = str_length(pNext) + 1;
 			Console()->ExecuteLine(pNext, IConsole::CLIENT_ID_GAME);
 			pNext += StrSize;

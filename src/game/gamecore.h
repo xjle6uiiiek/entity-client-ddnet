@@ -18,6 +18,14 @@
 
 class CCollision;
 class CTeamsCore;
+// <FoxNet
+class CQuadData;
+static inline vec2 RotateVec(vec2 v, float a)
+{
+	const float c = cosf(a), s = sinf(a);
+	return vec2(v.x * c - v.y * s, v.x * s + v.y * c);
+}
+// FoxNet>
 
 class CTuneParam
 {
@@ -68,10 +76,6 @@ public:
 
 	static const CTuningParams DEFAULT;
 };
-
-// Do not use these function unless for legacy code!
-void StrToInts(int *pInts, size_t NumInts, const char *pStr);
-bool IntsToStr(const int *pInts, size_t NumInts, char *pStr, size_t StrSize);
 
 inline vec2 CalcPos(vec2 Pos, vec2 Velocity, float Curvature, float Speed, float Time)
 {
@@ -185,6 +189,11 @@ public:
 	static constexpr vec2 PhysicalSizeVec2() { return vec2(28.0f, 28.0f); }
 	vec2 m_Pos;
 	vec2 m_Vel;
+
+	// <FoxNet
+	const CQuadData *m_pHookedQuad = nullptr;
+	vec2 m_HookQuadLocal = vec2(0, 0);
+	// FoxNet>
 
 	vec2 m_HookPos;
 	vec2 m_HookDir;

@@ -68,57 +68,6 @@ float CTuningParams::GetWeaponFireDelay(int Weapon) const
 
 static_assert(std::numeric_limits<char>::is_signed, "char must be signed for StrToInts to work correctly");
 
-void StrToInts(int *pInts, size_t NumInts, const char *pStr)
-{
-	dbg_assert(NumInts > 0, "StrToInts: NumInts invalid");
-	const size_t StrSize = str_length(pStr) + 1;
-	dbg_assert(StrSize <= NumInts * sizeof(int), "StrToInts: string truncated");
-
-	for(size_t i = 0; i < NumInts; i++)
-	{
-		// Copy to temporary buffer to ensure we don't read past the end of the input string
-		char aBuf[sizeof(int)] = {0, 0, 0, 0};
-		for(size_t c = 0; c < sizeof(int) && i * sizeof(int) + c < StrSize; c++)
-		{
-			aBuf[c] = pStr[i * sizeof(int) + c];
-		}
-		pInts[i] = ((aBuf[0] + 128) << 24) | ((aBuf[1] + 128) << 16) | ((aBuf[2] + 128) << 8) | (aBuf[3] + 128);
-	}
-	// Last byte is always zero and unused in this format
-	pInts[NumInts - 1] &= 0xFFFFFF00;
-}
-
-bool IntsToStr(const int *pInts, size_t NumInts, char *pStr, size_t StrSize)
-{
-	dbg_assert(NumInts > 0, "IntsToStr: NumInts invalid");
-	dbg_assert(StrSize >= NumInts * sizeof(int), "IntsToStr: StrSize invalid");
-
-	// Unpack string without validation
-	size_t StrIndex = 0;
-	for(size_t IntIndex = 0; IntIndex < NumInts; IntIndex++)
-	{
-		const int CurrentInt = pInts[IntIndex];
-		pStr[StrIndex] = ((CurrentInt >> 24) & 0xff) - 128;
-		StrIndex++;
-		pStr[StrIndex] = ((CurrentInt >> 16) & 0xff) - 128;
-		StrIndex++;
-		pStr[StrIndex] = ((CurrentInt >> 8) & 0xff) - 128;
-		StrIndex++;
-		pStr[StrIndex] = (CurrentInt & 0xff) - 128;
-		StrIndex++;
-	}
-	// Ensure null-termination
-	pStr[StrIndex - 1] = '\0';
-
-	// Ensure valid UTF-8
-	if(str_utf8_check(pStr))
-	{
-		return true;
-	}
-	pStr[0] = '\0';
-	return false;
-}
-
 float VelocityRamp(float Value, float Start, float Range, float Curvature)
 {
 	if(Value < Start)
@@ -144,6 +93,9 @@ void CCharacterCore::SetCoreWorld(CWorldCore *pWorld, CCollision *pCollision, CT
 
 void CCharacterCore::Reset()
 {
+	m_pHookedQuad = nullptr;
+	m_HookQuadLocal = vec2(0, 0);
+
 	m_Pos = vec2(0, 0);
 	m_Vel = vec2(0, 0);
 	m_NewHook = false;
@@ -274,6 +226,7 @@ void CCharacterCore::Tick(bool UseInput, bool DoDeferredTick)
 			SetHookedPlayer(-1);
 			m_HookState = HOOK_IDLE;
 			m_HookPos = m_Pos;
+			m_pHookedQuad = nullptr;
 		}
 	}
 
@@ -329,7 +282,10 @@ void CCharacterCore::Tick(bool UseInput, bool DoDeferredTick)
 		bool GoingToRetract = false;
 		bool GoingThroughTele = false;
 		int TeleNr = 0;
-		int Hit = m_pCollision->IntersectLineTeleHook(m_HookPos, NewPos, &NewPos, nullptr, &TeleNr);
+		// <FoxNet
+		const CQuadData *pHitQuad = nullptr;
+		int Hit = m_pCollision->IntersectLineTeleHook(m_HookPos, NewPos, &NewPos, nullptr, &TeleNr, &pHitQuad);
+		// FoxNet>
 
 		if(Hit)
 		{
@@ -376,6 +332,20 @@ void CCharacterCore::Tick(bool UseInput, bool DoDeferredTick)
 			{
 				m_TriggeredEvents |= COREEVENT_HOOK_ATTACH_GROUND;
 				m_HookState = HOOK_GRABBED;
+
+				// If we hit a hookable moving quad, remember it and compute local anchor
+				if(pHitQuad)
+				{
+					m_pHookedQuad = pHitQuad;
+					const vec2 pivot = pHitQuad->m_Pos[4];
+					const float ang = pHitQuad->m_Angle;
+					// local = R(-ang) * (world_hit - pivot)
+					m_HookQuadLocal = RotateVec(NewPos - pivot, -ang);
+				}
+				else
+				{
+					m_pHookedQuad = nullptr;
+				}
 			}
 			else if(GoingToRetract)
 			{
@@ -393,6 +363,9 @@ void CCharacterCore::Tick(bool UseInput, bool DoDeferredTick)
 				m_HookPos = m_pCollision->TeleOuts(TeleNr - 1)[RandomOut] + TargetDirection * PhysicalSize() * 1.5f;
 				m_HookDir = TargetDirection;
 				m_HookTeleBase = m_HookPos;
+
+				// Teleport breaks attachment
+				m_pHookedQuad = nullptr;
 			}
 			else
 			{
@@ -405,16 +378,29 @@ void CCharacterCore::Tick(bool UseInput, bool DoDeferredTick)
 	{
 		if(m_HookedPlayer != -1 && m_pWorld)
 		{
+			m_pHookedQuad = nullptr;
+
 			CCharacterCore *pCharCore = m_pWorld->m_apCharacters[m_HookedPlayer];
 			if(pCharCore && m_Id != -1 && m_pTeams->CanKeepHook(m_Id, pCharCore->m_Id))
+			{
 				m_HookPos = pCharCore->m_Pos;
+			}
 			else
 			{
 				// release hook
 				SetHookedPlayer(-1);
 				m_HookState = HOOK_RETRACTED;
 				m_HookPos = m_Pos;
+				m_pHookedQuad = nullptr;
 			}
+		} 
+		
+		// Update anchored hook head if grabbed to a moving quad
+		if(m_HookedPlayer == -1 && m_pHookedQuad)
+		{
+			const vec2 pivot = m_pHookedQuad->m_Pos[4];
+			const float ang = m_pHookedQuad->m_Angle;
+			m_HookPos = pivot + RotateVec(m_HookQuadLocal, ang);
 		}
 
 		// don't do this hook routine when we are already hooked to a player
@@ -448,6 +434,7 @@ void CCharacterCore::Tick(bool UseInput, bool DoDeferredTick)
 			SetHookedPlayer(-1);
 			m_HookState = HOOK_RETRACTED;
 			m_HookPos = m_Pos;
+			m_pHookedQuad = nullptr;
 		}
 	}
 

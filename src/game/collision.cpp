@@ -15,6 +15,10 @@
 
 #include <cmath>
 
+#include <base/log.h>
+#include "gamecore.h"
+#include <game/envelopeaccess.h>
+
 vec2 ClampVel(int MoveRestriction, vec2 Vel)
 {
 	if(Vel.x > 0 && (MoveRestriction & CANTMOVE_RIGHT))
@@ -146,6 +150,40 @@ void CCollision::Init(class CLayers *pLayers)
 			}
 		}
 	}
+	// <FoxNet
+	for(const auto pQuadLayers : m_pLayers->QuadLayers())
+	{ //https://github.com/M0REKZ/kaizo-network/blob/ebe1f88f356d396da6f48ce62e830faa93f9eb8a/src/game/collision.cpp#L79
+		CQuad *pQuads = (CQuad *)m_pLayers->Map()->GetDataSwapped(pQuadLayers->m_Data);
+		for(int i = 0; i < pQuadLayers->m_NumQuads; i++)
+		{
+			char QuadName[30] = "";
+			IntsToStr(pQuadLayers->m_aName, std::size(pQuadLayers->m_aName), QuadName, std::size(QuadName));
+
+			CQuadData QuadData;
+			QuadData.m_pQuad = &pQuads[i];
+			QuadData.m_pLayer = pQuadLayers;
+			QuadData.m_Type = QUADTYPE_NONE;
+			for(size_t n = 0; n < std::size(ValidQuadNames); n++)
+			{
+				if(!str_comp(QuadName, ValidQuadNames[n]))
+				{
+					QuadData.m_Type = n;
+					break;
+				}
+			}
+			if(QuadData.m_Type == QUADTYPE_NONE)
+				continue;
+			if(QuadData.m_Type == QUADTYPE_HOOKABLE || QuadData.m_Type == QUADTYPE_UNHOOKABLE)
+				m_HasSolidQuads = true;
+			m_vNextQuads.push_back(QuadData);
+		}
+	}
+	m_vQuads = m_vNextQuads;
+
+	int QuadLayers = (int)m_pLayers->QuadLayers().size();
+	if(QuadLayers > 0)
+		log_info("moving-tiles", "%d valid quadlayer%s with %d quads", QuadLayers, QuadLayers == 1 ? "" : "s", (int)m_vNextQuads.size());
+	// FoxNet>
 }
 
 void CCollision::Unload()
@@ -169,6 +207,11 @@ void CCollision::Unload()
 	m_pTune = nullptr;
 	delete[] m_pDoor;
 	m_pDoor = nullptr;
+
+	// <FoxNet
+	ClearQuadLayers();
+	m_HasSolidQuads = false;
+	// FoxNet>
 }
 
 void CCollision::FillAntibot(CAntibotMapData *pMapData) const
@@ -339,13 +382,18 @@ int CCollision::IntersectLine(vec2 Pos0, vec2 Pos1, vec2 *pOutCollision, vec2 *p
 		int ix = round_to_int(Pos.x);
 		int iy = round_to_int(Pos.y);
 
-		if(CheckPoint(ix, iy))
+		const CQuadData *pHitQuad = nullptr;
+		if(CheckPoint(ix, iy, &pHitQuad))
 		{
 			if(pOutCollision)
 				*pOutCollision = Pos;
 			if(pOutBeforeCollision)
 				*pOutBeforeCollision = Last;
-			return GetCollisionAt(ix, iy);
+
+			int Tile = GetCollisionAt(ix, iy);
+			if(pHitQuad)
+				Tile = QuadTypeToTile(pHitQuad->m_Type);
+			return Tile;
 		}
 
 		Last = Pos;
@@ -357,8 +405,11 @@ int CCollision::IntersectLine(vec2 Pos0, vec2 Pos1, vec2 *pOutCollision, vec2 *p
 	return 0;
 }
 
-int CCollision::IntersectLineTeleHook(vec2 Pos0, vec2 Pos1, vec2 *pOutCollision, vec2 *pOutBeforeCollision, int *pTeleNr) const
+int CCollision::IntersectLineTeleHook(vec2 Pos0, vec2 Pos1, vec2 *pOutCollision, vec2 *pOutBeforeCollision, int *pTeleNr, const CQuadData **ppOutQuad) const
 {
+	if(ppOutQuad)
+		*ppOutQuad = nullptr;
+
 	float Distance = distance(Pos0, Pos1);
 	int End(Distance + 1);
 	vec2 Last = Pos0;
@@ -390,15 +441,26 @@ int CCollision::IntersectLineTeleHook(vec2 Pos0, vec2 Pos1, vec2 *pOutCollision,
 		}
 
 		int Hit = 0;
-		if(CheckPoint(ix, iy))
+		const CQuadData *pHitQuad = nullptr;
+		if(CheckPoint(ix, iy, &pHitQuad))
 		{
 			if(!IsThrough(ix, iy, dx, dy, Pos0, Pos1))
+			{
 				Hit = GetCollisionAt(ix, iy);
+
+				if(pHitQuad)
+				{
+					if(ppOutQuad)
+						*ppOutQuad = pHitQuad;
+					Hit = QuadTypeToTile(pHitQuad->m_Type);
+				}
+			}
 		}
 		else if(IsHookBlocker(ix, iy, Pos0, Pos1))
 		{
 			Hit = TILE_NOHOOK;
 		}
+
 		if(Hit)
 		{
 			if(pOutCollision)
@@ -504,16 +566,16 @@ void CCollision::MovePoint(vec2 *pInoutPos, vec2 *pInoutVel, float Elasticity, i
 	}
 }
 
-bool CCollision::TestBox(vec2 Pos, vec2 Size) const
+bool CCollision::TestBox(vec2 Pos, vec2 Size, const CQuadData **ppHitQuad) const
 {
 	Size *= 0.5f;
-	if(CheckPoint(Pos.x - Size.x, Pos.y - Size.y))
+	if(CheckPoint(Pos.x - Size.x, Pos.y - Size.y, ppHitQuad))
 		return true;
-	if(CheckPoint(Pos.x + Size.x, Pos.y - Size.y))
+	if(CheckPoint(Pos.x + Size.x, Pos.y - Size.y, ppHitQuad))
 		return true;
-	if(CheckPoint(Pos.x - Size.x, Pos.y + Size.y))
+	if(CheckPoint(Pos.x - Size.x, Pos.y + Size.y, ppHitQuad))
 		return true;
-	if(CheckPoint(Pos.x + Size.x, Pos.y + Size.y))
+	if(CheckPoint(Pos.x + Size.x, Pos.y + Size.y, ppHitQuad))
 		return true;
 	return false;
 }
@@ -527,45 +589,82 @@ void CCollision::MoveBox(vec2 *pInoutPos, vec2 *pInoutVel, vec2 Size, vec2 Elast
 	float Distance = length(Vel);
 	int Max = (int)Distance;
 
-	if(Distance > 0.00001f)
+	auto QuadStepDeltaAt = [&](vec2 Probe, float StepFraction, const CQuadData **ppHitQuad) -> vec2 {
+		vec2 Delta = vec2(0, 0);
+		if(!g_Config.m_SvMovingTiles)
+			return Delta;
+		if(!m_HasSolidQuads)
+			return Delta;
+		if(m_vQuads.empty() || m_vNextQuads.size() != m_vQuads.size())
+			return Delta;
+
+		vec2 FeetPos = vec2(Probe.x, Probe.y + Size.y / 2);
+
+		const CQuadData *pQuad = GetSolidQuad(FeetPos, Size);
+		if(!pQuad)
+			return Delta;
+		if(ppHitQuad)
+			*ppHitQuad = pQuad;
+
+		const CQuadData *pBase = m_vQuads.data();
+
+		ptrdiff_t idx = pQuad - pBase;
+		if(idx < 0 || (size_t)idx >= m_vNextQuads.size())
+			return Delta;
+
+		const vec2 CurCenter = vec2(round_to_int(m_vQuads[(size_t)idx].m_Pos[4].x * 100) / 100, round_to_int(m_vQuads[(size_t)idx].m_Pos[4].y * 100) / 100);
+		const vec2 NextCenter = vec2(round_to_int(m_vNextQuads[(size_t)idx].m_Pos[4].x * 100) / 100, round_to_int(m_vNextQuads[(size_t)idx].m_Pos[4].y * 100) / 100);
+
+		if(CurCenter.y > NextCenter.y) // causes entities to float a bit above the platform? dunno dont care - it works
+			return Delta;
+
+		if(distance(NextCenter, CurCenter) > 32 /*1 tile*/)
+			return Delta;
+
+		Delta += (NextCenter - CurCenter) * StepFraction;
+
+		return Delta;
+	};
+
+	const CQuadData *HitQuad = nullptr;
+
+	// If we are not moving ourselves but are on a moving quad, we still want to be pushed along.
+	// Peek full-frame quad displacement to decide whether to run at least one step.
+	const vec2 FullQuadDelta = QuadStepDeltaAt(Pos, 1.0f, &HitQuad);
+
+	if(Distance > 0.00001f || FullQuadDelta != vec2(0, 0))
 	{
-		float Fraction = 1.0f / (float)(Max + 1);
+		float Fraction = 1.f / (float)(Max + 1);
 		float ElasticityX = std::clamp(Elasticity.x, -1.0f, 1.0f);
 		float ElasticityY = std::clamp(Elasticity.y, -1.0f, 1.0f);
 
 		for(int i = 0; i <= Max; i++)
 		{
-			// Early break as optimization to stop checking for collisions for
-			// large distances after the obstacles we have already hit reduced
-			// our speed to exactly 0.
-			if(Vel == vec2(0, 0))
-			{
+			if(Vel == vec2(0, 0) && FullQuadDelta == vec2(0, 0))
 				break;
-			}
 
-			vec2 NewPos = Pos + Vel * Fraction; // TODO: this row is not nice
+			const vec2 QuadDelta = QuadStepDeltaAt(Pos, Fraction, &HitQuad);
+			vec2 NewPos = Pos + Vel * Fraction;
+			NewPos += QuadDelta;
 
-			// Fraction can be very small and thus the calculation has no effect, no
-			// reason to continue calculating.
 			if(NewPos == Pos)
 			{
 				break;
 			}
 
-			if(TestBox(vec2(NewPos.x, NewPos.y), Size))
+			if(TestBox(vec2(NewPos.x, NewPos.y), Size, &HitQuad))
 			{
 				int Hits = 0;
-
-				if(TestBox(vec2(Pos.x, NewPos.y), Size))
+				if(TestBox(vec2(Pos.x, NewPos.y), Size, &HitQuad))
 				{
-					if(pGrounded && ElasticityY > 0 && Vel.y > 0)
+					if(pGrounded && (ElasticityY > 0 || HitQuad) && Vel.y > 0)
 						*pGrounded = true;
 					NewPos.y = Pos.y;
 					Vel.y *= -ElasticityY;
 					Hits++;
 				}
 
-				if(TestBox(vec2(NewPos.x, Pos.y), Size))
+				if(TestBox(vec2(NewPos.x, Pos.y), Size, &HitQuad))
 				{
 					NewPos.x = Pos.x;
 					Vel.x *= -ElasticityX;
@@ -576,7 +675,7 @@ void CCollision::MoveBox(vec2 *pInoutPos, vec2 *pInoutVel, vec2 Size, vec2 Elast
 				// this is a real _corner case_!
 				if(Hits == 0)
 				{
-					if(pGrounded && ElasticityY > 0 && Vel.y > 0)
+					if(pGrounded && (ElasticityY > 0 || HitQuad) && Vel.y > 0)
 						*pGrounded = true;
 					NewPos.y = Pos.y;
 					Vel.y *= -ElasticityY;
@@ -595,10 +694,26 @@ void CCollision::MoveBox(vec2 *pInoutPos, vec2 *pInoutVel, vec2 Size, vec2 Elast
 
 // DDRace
 
-int CCollision::IsSolid(int x, int y) const
+int CCollision::IsSolid(int x, int y, const CQuadData **ppHitQuad) const
 {
-	const int Index = GetTile(x, y);
-	return Index == TILE_SOLID || Index == TILE_NOHOOK;
+	if(ppHitQuad)
+		*ppHitQuad = nullptr;
+	if(m_HasSolidQuads)
+	{
+		const CQuadData *pQuad = GetSolidQuad(vec2((float)x, (float)y));
+		if(pQuad)
+		{
+			if(ppHitQuad)
+				*ppHitQuad = pQuad;
+
+			if(pQuad->m_Type == QUADTYPE_HOOKABLE)
+				return TILE_SOLID;
+			else if(pQuad->m_Type == QUADTYPE_UNHOOKABLE)
+				return TILE_NOHOOK;
+		}
+	}
+	int index = GetTile(x, y);
+	return index == TILE_SOLID || index == TILE_NOHOOK;
 }
 
 bool CCollision::IsThrough(int x, int y, int OffsetX, int OffsetY, vec2 Pos0, vec2 Pos1) const
@@ -1296,4 +1411,307 @@ size_t CCollision::TeleAllSize(int Number)
 	if(m_TeleOthers.contains(Number))
 		Total += m_TeleOthers[Number].size();
 	return Total;
+}
+
+// <FoxNet
+void CCollision::ClearQuadLayers()
+{
+	m_vQuads.clear();
+	m_vNextQuads.clear();
+}
+
+void CCollision::Rotate(vec2 Center, vec2 *pPoint, float Rotation) const
+{
+	float x = pPoint->x - Center.x;
+	float y = pPoint->y - Center.y;
+	pPoint->x = (x * cosf(Rotation) - y * sinf(Rotation) + Center.x);
+	pPoint->y = (x * sinf(Rotation) + y * cosf(Rotation) + Center.y);
+}
+
+std::vector<const CQuadData *> CCollision::GetQuadsAt(vec2 Pos) const
+{ //https://github.com/M0REKZ/kaizo-network/blob/ebe1f88f356d396da6f48ce62e830faa93f9eb8a/src/game/collision_kz.cpp#L1104
+	std::vector<const CQuadData *> vpQuads;
+
+	if(!g_Config.m_SvMovingTiles)
+		return vpQuads;
+
+	for(const auto &QuadData : m_vQuads)
+	{
+		vec2 TestRadius = vec2(0, 0);
+		if(QuadData.m_Type == QUADTYPE_DEATH)
+			TestRadius = vec2(8, 8);
+		else if(QuadData.m_Type == QUADTYPE_STOPA || QuadData.m_Type == QUADTYPE_HOOKABLE || QuadData.m_Type == QUADTYPE_UNHOOKABLE)
+			TestRadius = CCharacterCore::PhysicalSizeVec2() * 0.55f;
+
+		if(InsideQuad(Pos, TestRadius, QuadData.m_Pos[0], QuadData.m_Pos[1], QuadData.m_Pos[2], QuadData.m_Pos[3]))
+			vpQuads.push_back(&QuadData);
+	}
+	return vpQuads;
+}
+
+const CQuadData *CCollision::GetQuad(vec2 Pos) const
+{
+	if(!g_Config.m_SvMovingTiles)
+		return nullptr;
+	for(const auto &QuadData : m_vQuads)
+	{
+		vec2 TestRadius = vec2(0, 0);
+		if(QuadData.m_Type == QUADTYPE_DEATH)
+			TestRadius = vec2(8, 8);
+		else if(QuadData.m_Type == QUADTYPE_STOPA)
+			TestRadius = CCharacterCore::PhysicalSizeVec2() * 0.6f;
+
+		if(InsideQuad(Pos, TestRadius, QuadData.m_Pos[0], QuadData.m_Pos[1], QuadData.m_Pos[2], QuadData.m_Pos[3]))
+			return &QuadData;
+	}
+	return nullptr;
+}
+
+const CQuadData *CCollision::GetSolidQuad(vec2 Pos, vec2 Size) const
+{
+	if(!g_Config.m_SvMovingTiles)
+		return nullptr;
+
+	Size *= 0.5f;
+	for(const auto &QuadData : m_vQuads)
+	{
+		if(QuadData.m_Type != QUADTYPE_HOOKABLE && QuadData.m_Type != QUADTYPE_UNHOOKABLE)
+			continue;
+
+		if(InsideQuad(Pos, Size, QuadData.m_Pos[0], QuadData.m_Pos[1], QuadData.m_Pos[2], QuadData.m_Pos[3]))
+			return &QuadData;
+	}
+	return nullptr;
+}
+
+int CCollision::QuadTypeToTile(int QuadType) const
+{
+	switch(QuadType)
+	{
+	case QUADTYPE_FREEZE:
+		return TILE_FREEZE;
+	case QUADTYPE_UNFREEZE:
+		return TILE_UNFREEZE;
+	case QUADTYPE_DEATH:
+		return TILE_DEATH;
+	case QUADTYPE_STOPA:
+		return TILE_STOPA;
+	case QUADTYPE_CFRM:
+		return TILE_TELECHECKINEVIL;
+	case QUADTYPE_HOOKABLE:
+		return TILE_SOLID;
+	case QUADTYPE_UNHOOKABLE:
+		return TILE_NOHOOK;
+	default:
+		return QUADTYPE_NONE;
+	}
+}
+
+const CQuadData *CCollision::GetQuad(vec2 Pos, vec2 Size) const
+{
+	Size *= 0.5f;
+	for(const auto &QuadData : m_vQuads)
+	{
+		if(InsideQuad(Pos, Size, QuadData.m_Pos[0], QuadData.m_Pos[1], QuadData.m_Pos[2], QuadData.m_Pos[3]))
+			return &QuadData;
+	}
+	return nullptr;
+}
+
+void CCollision::GetAnimationTransform(float GlobalTime, int Env, vec2 &Position, float &Angle) const
+{
+	Position.x = 0.0f;
+	Position.y = 0.0f;
+	Angle = 0.0f;
+
+	if(Env < 0)
+		return;
+
+	int Start, Num;
+	m_pLayers->Map()->GetType(MAPITEMTYPE_ENVELOPE, &Start, &Num);
+	if(Env >= Num)
+		return;
+
+	CMapItemEnvelope *pItem = (CMapItemEnvelope *)m_pLayers->Map()->GetItem(Start + Env, 0, 0);
+	if(pItem->m_NumPoints == 0)
+		return;
+
+	IMap *pMap = m_pLayers->Map();
+	CMapBasedEnvelopePointAccess EnvelopePoints(pMap);
+	EnvelopePoints.SetPointsRange(pItem->m_StartPoint, pItem->m_NumPoints);
+	if(EnvelopePoints.NumPoints() == 0)
+		return;
+
+	// Single point shortcut
+	if(EnvelopePoints.NumPoints() == 1)
+	{
+		const CEnvPoint *pOnly = EnvelopePoints.GetPoint(0);
+		Position.x = fx2f(pOnly->m_aValues[0]);
+		Position.y = fx2f(pOnly->m_aValues[1]);
+		Angle = fx2f(pOnly->m_aValues[2]) / 360.0f * pi * 2.0f;
+		return;
+	}
+
+	const int NumPoints = EnvelopePoints.NumPoints();
+	const CEnvPoint *pLastPoint = EnvelopePoints.GetPoint(NumPoints - 1);
+
+	// Convert GlobalTime (seconds) to milliseconds like RenderEvalEnvelope logic
+	double GlobalMillis = (double)GlobalTime * 1000.0;
+	const int64_t LoopMillis = (int64_t)pLastPoint->m_Time.GetInternal();
+	if(LoopMillis > 0)
+		GlobalMillis = std::fmod(GlobalMillis, (double)LoopMillis);
+	else
+		GlobalMillis = 0.0; // degenerate envelope
+
+	// Locate current segment
+	int FoundIndex = EnvelopePoints.FindPointIndex(CFixedTime(GlobalMillis));
+	if(FoundIndex == -1)
+	{
+		// After last point
+		Position.x = fx2f(pLastPoint->m_aValues[0]);
+		Position.y = fx2f(pLastPoint->m_aValues[1]);
+		Angle = fx2f(pLastPoint->m_aValues[2]) / 360.0f * pi * 2.0f;
+		return;
+	}
+
+	const CEnvPoint *pCur = EnvelopePoints.GetPoint(FoundIndex);
+	const CEnvPoint *pNext = EnvelopePoints.GetPoint(FoundIndex + 1);
+	CFixedTime Delta = pNext->m_Time - pCur->m_Time;
+	if(Delta <= CFixedTime(0))
+	{
+		Position.x = fx2f(pCur->m_aValues[0]);
+		Position.y = fx2f(pCur->m_aValues[1]);
+		Angle = fx2f(pCur->m_aValues[2]) / 360.0f * pi * 2.0f;
+		return;
+	}
+
+	float a = (float)(GlobalMillis - pCur->m_Time.GetInternal()) / (float)Delta.GetInternal();
+	switch(pCur->m_Curvetype)
+	{
+	case CURVETYPE_STEP:
+		a = 0.0f;
+		break;
+	case CURVETYPE_SLOW:
+		a = a * a * a;
+		break;
+	case CURVETYPE_FAST:
+		a = 1.0f - a;
+		a = 1.0f - a * a * a;
+		break;
+	case CURVETYPE_SMOOTH:
+		a = -2.0f * a * a * a + 3.0f * a * a; // Hermite smoothstep
+		break;
+	case CURVETYPE_BEZIER:
+	{
+		const CEnvPointBezier *pCurBez = EnvelopePoints.GetBezier(FoundIndex);
+		const CEnvPointBezier *pNextBez = EnvelopePoints.GetBezier(FoundIndex + 1);
+		if(pCurBez && pNextBez)
+		{
+			float Channels[3] = {0.f, 0.f, 0.f};
+			for(size_t c = 0; c < 3; ++c)
+			{
+				// 2D cubic bezier in (time,value) space (time in ms)
+				vec2 P0 = vec2(pCur->m_Time.GetInternal(), fx2f(pCur->m_aValues[c]));
+				vec2 P3 = vec2(pNext->m_Time.GetInternal(), fx2f(pNext->m_aValues[c]));
+				vec2 OutTang = vec2(pCurBez->m_aOutTangentDeltaX[c].GetInternal(), fx2f(pCurBez->m_aOutTangentDeltaY[c]));
+				vec2 InTang = vec2(pNextBez->m_aInTangentDeltaX[c].GetInternal(), fx2f(pNextBez->m_aInTangentDeltaY[c]));
+				vec2 P1 = P0 + OutTang;
+				vec2 P2 = P3 + InTang;
+				P1.x = std::clamp(P1.x, P0.x, P3.x);
+				P2.x = std::clamp(P2.x, P0.x, P3.x);
+				float t = std::clamp(SolveBezier((float)GlobalMillis, P0.x, P1.x, P2.x, P3.x), 0.0f, 1.0f);
+				Channels[c] = bezier(P0.y, P1.y, P2.y, P3.y, t);
+			}
+			Position.x = Channels[0];
+			Position.y = Channels[1];
+			Angle = Channels[2] / 360.0f * pi * 2.0f;
+			return; // Bezier done
+		}
+		// fallthrough to linear if bezier data missing
+		break;
+	}
+	case CURVETYPE_LINEAR:
+	default:
+		break; // linear handled below
+	}
+
+	// Linear interpolation (or shaped 'a')
+	const float x0 = fx2f(pCur->m_aValues[0]);
+	const float x1 = fx2f(pNext->m_aValues[0]);
+	const float y0 = fx2f(pCur->m_aValues[1]);
+	const float y1 = fx2f(pNext->m_aValues[1]);
+	const float r0 = fx2f(pCur->m_aValues[2]);
+	const float r1 = fx2f(pNext->m_aValues[2]);
+	Position.x = x0 + (x1 - x0) * a;
+	Position.y = y0 + (y1 - y0) * a;
+	Angle = (r0 + (r1 - r0) * a) / 360.0f * pi * 2.0f;
+}
+
+void CCollision::UpdateQuadCache()
+{ // https://github.com/M0REKZ/kaizo-network/blob/ebe1f88f356d396da6f48ce62e830faa93f9eb8a/src/game/collision_kz.cpp#L1073
+	if(!g_Config.m_SvMovingTiles)
+		return;
+
+	m_vQuads = m_vNextQuads;
+
+	for(auto &QuadData : m_vNextQuads)
+	{
+		vec2 Position = vec2(0, 0);
+		GetAnimationTransform(m_Time + (QuadData.m_pQuad->m_PosEnvOffset / 1000.0), QuadData.m_pQuad->m_PosEnv, Position, QuadData.m_Angle);
+		for(int i = 0; i < 5; i++)
+			QuadData.m_Pos[i] = (Position + vec2(fx2f(QuadData.m_pQuad->m_aPoints[i].x), fx2f(QuadData.m_pQuad->m_aPoints[i].y)));
+
+		if(QuadData.m_Angle == 0)
+			continue;
+
+		for(int i = 0; i < 4; i++)
+			Rotate(QuadData.m_Pos[4], &QuadData.m_Pos[i], QuadData.m_Angle);
+	}
+}
+
+bool CCollision::InsideQuad(vec2 Pos, vec2 Size, vec2 T0, vec2 T1, vec2 T2, vec2 T3) const
+{
+	auto IsLeft = [](const vec2 &A, const vec2 &B, const vec2 &P) -> bool {
+		return ((B.x - A.x) * (P.y - A.y) - (B.y - A.y) * (P.x - A.x)) >= 0.0f;
+	};
+
+	bool Inside =
+		IsLeft(T0, T1, Pos) &&
+		IsLeft(T1, T3, Pos) &&
+		IsLeft(T3, T2, Pos) &&
+		IsLeft(T2, T0, Pos);
+
+	if(Inside)
+		return true;
+
+	if(Size.x <= 0.0f && Size.y <= 0.0f)
+		return false;
+
+	auto CircleIntersectsSegment = [](const vec2 &C, float R, const vec2 &A, const vec2 &B) -> bool {
+		vec2 AB = B - A;
+		vec2 AC = C - A;
+		float t = std::clamp(dot(AC, AB) / dot(AB, AB), 0.0f, 1.0f);
+		vec2 Closest = A + AB * t;
+		return distance(C, Closest) <= R;
+	};
+
+	if(CircleIntersectsSegment(Pos, Size.x, T0, T1))
+		return true;
+	if(CircleIntersectsSegment(Pos, Size.x, T1, T3))
+		return true;
+	if(CircleIntersectsSegment(Pos, Size.x, T3, T2))
+		return true;
+	if(CircleIntersectsSegment(Pos, Size.x, T2, T0))
+		return true;
+
+	if(distance(Pos, T0) <= Size.x)
+		return true;
+	if(distance(Pos, T1) <= Size.x)
+		return true;
+	if(distance(Pos, T2) <= Size.x)
+		return true;
+	if(distance(Pos, T3) <= Size.x)
+		return true;
+
+	return false;
 }

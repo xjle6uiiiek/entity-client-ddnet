@@ -18,6 +18,20 @@ class CSwitchTile;
 class CTuneTile;
 class CDoorTile;
 
+// <FoxNet
+class CQuad;
+class CMapItemLayerQuads;
+class CQuadData
+{
+public:
+	CQuad *m_pQuad = nullptr;
+	CMapItemLayerQuads *m_pLayer = nullptr;
+	int m_Type = 0;
+	vec2 m_Pos[5] = {vec2(0, 0)}; // 4 corners + center
+	float m_Angle = 0.0f;
+};
+// FoxNet>
+
 enum
 {
 	CANTMOVE_LEFT = 1 << 0,
@@ -41,17 +55,17 @@ public:
 	void Unload();
 	void FillAntibot(CAntibotMapData *pMapData) const;
 
-	bool CheckPoint(float x, float y) const { return IsSolid(round_to_int(x), round_to_int(y)); }
-	bool CheckPoint(vec2 Pos) const { return CheckPoint(Pos.x, Pos.y); }
+	bool CheckPoint(float x, float y, const CQuadData **ppHitQuad = nullptr) const { return IsSolid(round_to_int(x), round_to_int(y), ppHitQuad); }
+	bool CheckPoint(vec2 Pos, const CQuadData **ppHitQuad = nullptr) const { return CheckPoint(Pos.x, Pos.y, ppHitQuad); }
 	int GetCollisionAt(float x, float y) const { return GetTile(round_to_int(x), round_to_int(y)); }
 	int GetWidth() const { return m_Width; }
 	int GetHeight() const { return m_Height; }
 	int IntersectLine(vec2 Pos0, vec2 Pos1, vec2 *pOutCollision, vec2 *pOutBeforeCollision) const;
 	int IntersectLineTeleWeapon(vec2 Pos0, vec2 Pos1, vec2 *pOutCollision, vec2 *pOutBeforeCollision, int *pTeleNr = nullptr) const;
-	int IntersectLineTeleHook(vec2 Pos0, vec2 Pos1, vec2 *pOutCollision, vec2 *pOutBeforeCollision, int *pTeleNr = nullptr) const;
+	int IntersectLineTeleHook(vec2 Pos0, vec2 Pos1, vec2 *pOutCollision, vec2 *pOutBeforeCollision, int *pTeleNr = nullptr, const CQuadData **ppOutQuad = nullptr) const;
 	void MovePoint(vec2 *pInoutPos, vec2 *pInoutVel, float Elasticity, int *pBounces) const;
 	void MoveBox(vec2 *pInoutPos, vec2 *pInoutVel, vec2 Size, vec2 Elasticity, bool *pGrounded = nullptr) const;
-	bool TestBox(vec2 Pos, vec2 Size) const;
+	bool TestBox(vec2 Pos, vec2 Size, const CQuadData **ppHitQuad = nullptr) const;
 
 	// DDRace
 	void SetCollisionAt(float x, float y, int Index);
@@ -99,7 +113,7 @@ public:
 	int GetSwitchNumber(int Index) const;
 	int GetSwitchDelay(int Index) const;
 
-	int IsSolid(int x, int y) const;
+	int IsSolid(int x, int y, const CQuadData **ppHitQuad = nullptr) const;
 	bool IsThrough(int x, int y, int OffsetX, int OffsetY, vec2 Pos0, vec2 Pos1) const;
 	bool IsHookBlocker(int x, int y, vec2 Pos0, vec2 Pos1) const;
 	int IsWallJump(int Index) const;
@@ -166,6 +180,42 @@ private:
 	std::map<int, std::vector<vec2>> m_TeleCheckOuts;
 	// TILE_TELEINEVIL, TILE_TELECHECK, TILE_TELECHECKIN, TILE_TELECHECKINEVIL
 	std::map<int, std::vector<vec2>> m_TeleOthers;
+
+		// <FoxNet
+	double m_Time;
+	struct SAnimationTransformCache
+	{
+		vec2 Position = vec2(0.0f, 0.f);
+		float Angle = 0;
+		int PosEnv = -1;
+		int PosEnvOffset = 0;
+	};
+	void GetAnimationTransform(float GlobalTime, int Env, vec2 &Position, float &Angle) const;
+
+	std::vector<CQuadData> m_vQuads;
+	std::vector<CQuadData> m_vNextQuads;
+
+	bool m_HasSolidQuads = false;
+
+public:
+	bool HasMovingQuads() const { return !m_vQuads.empty() && !m_vNextQuads.empty(); }
+
+	const std::vector<CQuadData> &QuadLayers() const { return m_vQuads; }
+	void UpdateQuadCache();
+
+	std::vector<const CQuadData *> GetQuadsAt(vec2 Pos) const;
+
+	const CQuadData *GetQuad(vec2 Pos) const;
+	const CQuadData *GetQuad(vec2 Pos, vec2 Size) const;
+	const CQuadData *GetSolidQuad(vec2 Pos, vec2 Size = vec2(0, 0)) const;
+	int QuadTypeToTile(int QuadType) const;
+
+	void ClearQuadLayers();
+	void Rotate(vec2 Center, vec2 *pPoint, float Rotation) const;
+
+	void SetTime(double Time) { m_Time = Time; }
+	bool InsideQuad(vec2 Pos, vec2 Size, vec2 TopLCorner, vec2 TopRCorner, vec2 BottomLCorner, vec2 BottomRCorner) const;
+	// FoxNet>
 };
 
 void ThroughOffset(vec2 Pos0, vec2 Pos1, int *pOffsetX, int *pOffsetY);

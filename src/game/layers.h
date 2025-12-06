@@ -3,11 +3,39 @@
 #ifndef GAME_LAYERS_H
 #define GAME_LAYERS_H
 
+#include <vector>
+
 class IMap;
 
 class CMapItemGroup;
 class CMapItemLayer;
 class CMapItemLayerTilemap;
+
+// <FoxNet
+class CMapItemLayerQuads;
+enum QuadTypes
+{
+	// Follows order of ValidQuadNames
+	QUADTYPE_NONE = -1,
+	QUADTYPE_FREEZE,
+	QUADTYPE_UNFREEZE,
+	QUADTYPE_DEATH,
+	QUADTYPE_STOPA,
+	QUADTYPE_CFRM,
+	QUADTYPE_HOOKABLE,
+	QUADTYPE_UNHOOKABLE,
+	NUM_QUADTYPES
+};
+
+constexpr char ValidQuadNames[NUM_QUADTYPES][30] = {
+	"QFr",
+	"QUnFr",
+	"QDeath",
+	"QStopa",
+	"QCfrm",
+	"QHook",
+	"QUnHook"};
+// FoxNet>
 
 class CLayers
 {
@@ -31,6 +59,9 @@ public:
 	CMapItemLayerTilemap *FrontLayer() const { return m_pFrontLayer; }
 	CMapItemLayerTilemap *SwitchLayer() const { return m_pSwitchLayer; }
 	CMapItemLayerTilemap *TuneLayer() const { return m_pTuneLayer; }
+	// <FoxNet
+	const std::vector<CMapItemLayerQuads *> &QuadLayers() const { return m_vQuadLayers; }
+	// FoxNet>
 
 private:
 	int m_GroupsNum;
@@ -47,6 +78,9 @@ private:
 	CMapItemLayerTilemap *m_pFrontLayer;
 	CMapItemLayerTilemap *m_pSwitchLayer;
 	CMapItemLayerTilemap *m_pTuneLayer;
+	// <FoxNet
+	std::vector<CMapItemLayerQuads *> m_vQuadLayers;
+	// FoxNet>
 
 	void InitTilemapSkip();
 };

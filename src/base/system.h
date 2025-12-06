@@ -2141,3 +2141,6 @@ bool str_isalluppercase(const char *str);
 
 void SetFlag(int32_t &Flags, int n, bool Value);
 bool IsFlagSet(int32_t Flags, int n);
+
+void StrToInts(int *pInts, size_t NumInts, const char *pStr);
+bool IntsToStr(const int *pInts, size_t NumInts, char *pStr, size_t StrSize);
