@@ -3718,7 +3718,6 @@ void CMenus::RenderTee(vec2 Pos, vec2 TeeDirection, const CAnimState *pAnim, CTe
 			TeeEmote = EMOTE_HAPPY;
 	}
 	RenderTools()->RenderTee(pAnim, pInfo, TeeEmote, TeeDirection, Pos);
-
 }
 
 bool CMenus::DoFloatScrollBar(const void *pId, int *pOption, const CUIRect *pRect, const char *pStr, int Min, int Max, int DivideBy, const IScrollbarScale *pScale, unsigned Flags, const char *pSuffix)
@@ -3877,7 +3876,6 @@ void CMenus::RenderSettingsProGaming(CUIRect MainView)
 		if(DoButton_MenuTab(&s_aPageTabs[Tab], apTabNames[Tab], s_CurTab == Tab, &Button, Corners, nullptr, nullptr, nullptr, nullptr, 4.0f))
 		{
 			s_CurTab = Tab;
-			ResetTeePos = true;
 		}
 	}
 
@@ -3963,12 +3961,14 @@ void CMenus::RenderSettingsProGaming(CUIRect MainView)
 
 					TeeRenderInfo.Apply(GameClient()->m_Skins.Find(g_Config.m_ClChangeAllSkinName));
 					TeeRenderInfo.ApplyColors(UseCustomColor, BodyColor, FeetColor);
+					TeeRenderInfo.m_Size = 75.0f;
 
-					RenderECTee(MainView, TeeRect.Center(), CAnimState::GetIdle(), &TeeRenderInfo);
+					RenderTee(TeeRect.Center(), TeeEyeDirection(TeeRect.Center()), CAnimState::GetIdle(), &TeeRenderInfo, EMOTE_NORMAL);
 				}
 				CUIRect CurSkin;
-				float Length = TextRender()->TextBoundingBox(FontSize, "Use Current Tee Settings").m_W + 8.0f;
-				float Height = TextRender()->TextBoundingBox(FontSize, "Use Current Tee Settings").m_H + 15.0f;
+				const char *pText = "Use Current Tee Settings";
+				float Length = TextRender()->TextBoundingBox(FontSize, pText).m_W + 8.0f;
+				float Height = TextRender()->TextBoundingBox(FontSize, pText).m_H + 15.0f;
 
 				AllPlayerSettings.HSplitTop(Margin, &CurSkin, 0);
 				CurSkin.HSplitTop(Height, &CurSkin, 0);
