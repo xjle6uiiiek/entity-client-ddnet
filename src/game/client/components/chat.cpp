@@ -55,7 +55,7 @@ CChat::CChat()
 	m_Mode = MODE_NONE;
 
 	m_Input.SetClipboardLineCallback([this](const char *pStr) {
-		if(GameClient()->m_EClient.FoxNetServer() && Client()->RconAuthed())
+		if(Client()->m_FoxNetVersion != 0 && Client()->RconAuthed())
 		{
 			SendChat(TEAM_FLOCK, pStr);
 			AddHistoryEntry(pStr);
@@ -318,7 +318,7 @@ bool CChat::OnInput(const IInput::CEvent &Event)
 				SilentMessageInfo = true;
 			}
 		}
-		else if(GameClient()->m_EClient.FoxNetServer() && Client()->RconAuthed())
+		else if(Client()->m_FoxNetVersion != 0 && Client()->RconAuthed())
 		{
 			SendChat(TEAM_FLOCK, m_Input.GetString());
 			AddHistoryEntry(m_Input.GetString());
@@ -776,8 +776,6 @@ void CChat::AddLine(int ClientId, int Team, const char *pLine)
 
 		char TypeName[512];
 		str_format(TypeName, sizeof(TypeName), "[%s]", GameClient()->m_WarList.GetWarTypeName(Line.m_ClientId));
-
-		bool IsWarlist = GameClient()->m_WarList.GetAnyWar(Line.m_ClientId);
 
 		const char *pFrom;
 		if(Line.m_Whisper)
@@ -1550,8 +1548,6 @@ bool CChat::ChatDetection(int ClientId, int Team, const char *pLine)
 					
 					char aReason[128] = "";
 					str_copy(aReason, aOldName);
-
-					const char *pClan = GameClient()->m_aClients[PlayerCid].m_aClan;
 
 					if(GameClient()->m_WarList.FindWarTypeWithName(aName) == 2)
 					{

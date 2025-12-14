@@ -46,3 +46,8 @@ UUID(NETMSG_RECONNECT, "reconnect@ddnet.org")
 UUID(NETMSG_MAPLIST_ADD, "sv-maplist-add@ddnet.org")
 UUID(NETMSG_MAPLIST_GROUP_START, "sv-maplist-start@ddnet.org")
 UUID(NETMSG_MAPLIST_GROUP_END, "sv-maplist-end@ddnet.org")
+
+// <FoxNet
+UUID(NETMSG_FOXNET_INFO, "sv-foxnet-info@foxnet-ddnet.github.io")
+UUID(NETMSG_FOXNET_FASTINPUTS, "cl-foxnet-fastinputs@foxnet-ddnet.github.io")
+// FoxNet>

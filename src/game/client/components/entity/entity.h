@@ -58,10 +58,10 @@ class CEClient : public CComponent
 
 	static void ConSpectateId(IConsole::IResult *pResult, void *pUserData);
 
-	bool m_FoxNetServer;
+	static void ConchainGoresMode(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
+	static void ConchainFastInputs(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
 
 public:
-	bool FoxNetServer() const { return m_FoxNetServer; }
 
 	bool m_SentKill;
 	int m_KillCount;
@@ -72,7 +72,7 @@ public:
 
 	void SaveSkin();
 	void RestoreSkin();
-	void OnlineInfo(bool Integrate = false);
+	void OnlineInfo();
 
 	// Movement Notification if tabbed out
 	vec2 m_LastPos = vec2(0, 0);
@@ -108,7 +108,6 @@ public:
 
 	int64_t m_RainbowDelay;
 
-	static void ConchainGoresMode(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
 	void GoresMode();
 
 	void GoresModeSave();

@@ -1,14 +1,24 @@
 ﻿
-#include <engine/console.h>
-#include <engine/shared/config.h>
+#include "entity.h"
 
-#include <game/client/gameclient.h>
-
+#include <base/log.h>
+#include <base/str.h>
 #include <base/system.h>
 
-#include "entity.h"
-#include <base/log.h>
+#include <engine/client.h>
+#include <engine/client/enums.h>
+#include <engine/config.h>
+#include <engine/console.h>
+#include <engine/shared/config.h>
+#include <engine/shared/protocol.h>
+
 #include <generated/protocol.h>
+
+#include <game/client/components/tclient/warlist.h>
+#include <game/client/gameclient.h>
+
+#include <cstdlib>
+#include <vector>
 
 void CEClient::ConVotekick(IConsole::IResult *pResult, void *pUserData)
 {
@@ -46,7 +56,7 @@ void CEClient::ConServerRainbowSaturation(IConsole::IResult *pResult, void *pUse
 		pSelf->m_RainbowSat[Dummy] = pResult->GetInteger(0);
 	}
 	else
-		log_info("E-Client","%d", pSelf->m_RainbowSat[g_Config.m_ClDummy]);
+		log_info("E-Client", "%d", pSelf->m_RainbowSat[g_Config.m_ClDummy]);
 }
 
 void CEClient::ConServerRainbowLightness(IConsole::IResult *pResult, void *pUserData)
@@ -239,76 +249,116 @@ void CEClient::SaveSkin()
 		GameClient()->ClientMessage("Can't Save! Rainbow mode is enabled.");
 }
 
-// ToDo @qxdFox: wtf is this??
-void CEClient::OnlineInfo(bool Integrate)
+void CEClient::OnlineInfo()
 {
-	char aBuf[512];
-	char active[512];
+	int Mutes = 0;
 
-	int NumberWars = 0;
-	int NumberHelpers = 0;
-	int NumberTeams = 0;
-	int NumberMutes = 0;
-
-	int NumberHelpersAfk = 0;
-	int NumberTeamsAfk = 0;
-	int NumberMutesAfk = 0;
-	int NumberWarsAfk = 0;
-
-	for(auto &Client : GameClient()->m_aClients)
+	class COnlineInfo
 	{
-		bool War = GameClient()->m_WarList.GetWarData(Client.ClientId()).m_WarGroupMatches[1];
-		bool Team = GameClient()->m_WarList.GetWarData(Client.ClientId()).m_WarGroupMatches[2];
-		bool Helper = GameClient()->m_WarList.GetWarData(Client.ClientId()).m_WarGroupMatches[3];
-		bool Mute = GameClient()->m_WarList.m_WarPlayers[Client.ClientId()].IsMuted;
+	public:
+		char m_aLabel[16];
+		int m_Amount;
+		int m_ActiveAmount;
+	};
 
-		if(!Client.m_Active && GameClient()->m_Teams.Team(Client.ClientId()) == 0)
+	std::vector<COnlineInfo> OnlineInfos;
+
+	bool HasAny = false;
+	for(size_t WarlistType = 1; WarlistType < GameClient()->m_WarList.m_WarTypes.size(); ++WarlistType)
+	{
+		int Amount = 0;
+		int AmountActive = 0;
+		for(const CGameClient::CClientData &Client : GameClient()->m_aClients)
+		{
+			bool Matches = GameClient()->m_WarList.GetWarData(Client.ClientId()).m_WarGroupMatches[WarlistType];
+			bool Muted = GameClient()->m_WarList.m_WarPlayers[Client.ClientId()].IsMuted;
+
+			if(!Client.m_Active && GameClient()->m_Teams.Team(Client.ClientId()) == 0)
+				continue;
+
+			if(Client.ClientId() == GameClient()->m_Snap.m_LocalClientId)
+				continue;
+
+			if(Muted)
+				Mutes++;
+			if(Matches)
+			{
+				Amount++;
+				if(!Client.m_Afk)
+					AmountActive++;
+				HasAny = true;
+			}
+		}
+		COnlineInfo Info;
+
+		char Label[16] = "";
+		str_copy(Label, GameClient()->m_WarList.m_WarTypes[WarlistType]->m_aWarName);
+		if(Amount != 1)
+		{
+			if(str_endswith(Label, "s"))
+				str_append(Label, "'", sizeof(Label));
+			else if(str_endswith(Label, "y"))
+			{
+				const int len = str_length(Label);
+				if(len >= 1)
+				{
+					Label[len - 1] = '\0';
+					str_append(Label, "ies", sizeof(Label));
+				}
+			}
+			else
+				str_append(Label, "s", sizeof(Label));
+		}
+
+		if(Label[0] == '\0')
 			continue;
 
-		if(Client.ClientId() == GameClient()->m_Snap.m_LocalClientId)
-			continue;
-
-		if(War)
-		{
-			NumberWars++;
-			if(Client.m_Afk)
-				NumberWarsAfk++;
-		}
-		else if(Team)
-		{
-			NumberTeams++;
-			if(Client.m_Afk)
-				NumberTeamsAfk++;
-		}
-		else if(Helper)
-		{
-			NumberHelpers++;
-			if(Client.m_Afk)
-				NumberHelpersAfk++;
-		}
-		if(Mute)
-		{
-			NumberMutes++;
-			if(Client.m_Afk)
-				NumberMutesAfk++;
-		}
+		str_copy(Info.m_aLabel, Label);
+		Info.m_Amount = Amount;
+		Info.m_ActiveAmount = AmountActive;
+		OnlineInfos.push_back(Info);
 	}
-
-	str_format(aBuf, sizeof(aBuf), "│ [online] %d Teams | %d Wars | %d Helpers | %d Mutes", NumberTeams, NumberWars, NumberHelpers, NumberMutes);
-	str_format(active, sizeof(active), "│ [active] %d Teams | %d Wars | %d Helpers | %d Mutes", NumberTeams - NumberTeamsAfk, NumberWars - NumberWarsAfk, NumberHelpers - NumberHelpersAfk, NumberMutes - NumberMutesAfk);
-	if(!Integrate)
+	if(Mutes > 0)
+		HasAny = true;
+	
+	if(!HasAny)
 	{
-		GameClient()->ClientMessage("╭──                  Entity Info");
-		GameClient()->ClientMessage("│");
-	}
-	GameClient()->ClientMessage(aBuf);
-	GameClient()->ClientMessage(active);
-	if(!Integrate)
-	{
-		GameClient()->ClientMessage("│");
+		GameClient()->ClientMessage("╭──         Online Info");
+		GameClient()->ClientMessage("│ No one from any group online.");
 		GameClient()->ClientMessage("╰───────────────────────");
+		return; // No one from warlist online
 	}
+
+	GameClient()->ClientMessage("╭──         Online Info");
+
+	char aBuf[64] = "";
+	char bBuf[32] = "";
+	if(Mutes > 0)
+		str_format(aBuf, sizeof(aBuf), "│ %d Mutes", Mutes);
+	GameClient()->ClientMessage(aBuf);
+	HasAny = false;
+	for(const COnlineInfo &Info : OnlineInfos)
+	{
+		const int ActiveAmount = Info.m_ActiveAmount;
+		const int AfkAmount = Info.m_Amount - Info.m_ActiveAmount;
+
+		if(ActiveAmount == 0)
+			continue;
+		str_format(aBuf, sizeof(aBuf), "│ %d %s", ActiveAmount, Info.m_aLabel);
+
+		if(AfkAmount > 0)
+			str_format(bBuf, sizeof(bBuf), " (+%d afk)", AfkAmount);
+		str_append(aBuf, bBuf);
+
+		GameClient()->ClientMessage(aBuf);
+		HasAny = true;
+	}
+	if(!HasAny)
+		GameClient()->ClientMessage("│ No Active players online.");
+
+	GameClient()->ClientMessage("╰───────────────────────");
 }
+
 void CEClient::PlayerInfo(const char *pName)
 {
 	char aBuf[1024];
@@ -326,22 +376,13 @@ void CEClient::PlayerInfo(const char *pName)
 		str_format(aBuf, sizeof(aBuf), "│ Clan: %s", GameClient()->m_aClients[Id].m_aClan);
 		GameClient()->ClientMessage(aBuf);
 		GameClient()->ClientMessage("│");
-		if(!GameClient()->m_aClients[Id].m_UseCustomColor)
-		{
-			str_format(aBuf, sizeof(aBuf), "│ Custom Color: %s", "No");
-			GameClient()->ClientMessage(aBuf);
-			GameClient()->ClientMessage("│");
-		}
-		else
-		{
-			str_format(aBuf, sizeof(aBuf), "│ Custom Color: %s", "Yes");
-			GameClient()->ClientMessage(aBuf);
-			str_format(aBuf, sizeof(aBuf), "│ Body Color: %d", GameClient()->m_aClients[Id].m_ColorBody);
-			GameClient()->ClientMessage(aBuf);
-			str_format(aBuf, sizeof(aBuf), "│ Feet Color: %d", GameClient()->m_aClients[Id].m_ColorFeet);
-			GameClient()->ClientMessage(aBuf);
-			GameClient()->ClientMessage("│");
-		}
+		str_format(aBuf, sizeof(aBuf), "│ Custom Color: %s", GameClient()->m_aClients[Id].m_UseCustomColor ? "Yes" : "No");
+		str_format(aBuf, sizeof(aBuf), "│ Body Color: %d", GameClient()->m_aClients[Id].m_ColorBody);
+		GameClient()->ClientMessage(aBuf);
+		str_format(aBuf, sizeof(aBuf), "│ Feet Color: %d", GameClient()->m_aClients[Id].m_ColorFeet);
+		GameClient()->ClientMessage(aBuf);
+		GameClient()->ClientMessage("│");
+		
 		str_format(aBuf, sizeof(aBuf), "│ Skin Name: %s", GameClient()->m_aClients[Id].m_aSkinName);
 		GameClient()->ClientMessage(aBuf);
 		GameClient()->ClientMessage("│");
@@ -449,6 +490,30 @@ void CEClient::OnConsoleInit()
 	Console()->Register("crash", "", CFGFLAG_CLIENT, ConCrash, this, "Crash your own client");
 
 	Console()->Chain("ec_gores_mode", ConchainGoresMode, this);
+	Console()->Chain("ec_fast_input", ConchainFastInputs, this);
+}
+
+void CEClient::ConchainGoresMode(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData)
+{
+	pfnCallback(pResult, pCallbackUserData);
+	CEClient *pSelf = (CEClient *)pUserData;
+	if(pResult->NumArguments())
+	{
+		int GoresMode = pResult->GetInteger(0);
+
+		if(GoresMode)
+			pSelf->GoresModeSave();
+		else
+			pSelf->GoresModeRestore();
+	}
+}
+
+void CEClient::ConchainFastInputs(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData)
+{
+	pfnCallback(pResult, pCallbackUserData);
+	CEClient *pSelf = (CEClient *)pUserData;
+	if(pResult->NumArguments())
+		pSelf->Client()->SendFastInputsInfo(g_Config.m_ClDummy);
 }
 
 void CEClient::ConfigSaveCallback(IConfigManager *pConfigManager, void *pUserData)

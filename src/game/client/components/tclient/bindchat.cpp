@@ -212,9 +212,6 @@ void CBindChat::OnConsoleInit()
 	AddDefaultBind("restore", "restoreskin");
 	AddDefaultBind("save", "saveskin");
 
-
-	AddDefaultBind("temphelper", "addtemphelper");
-
 	AddDefaultBind("tempmute", "addtempmute");
 
 	AddDefaultBind("tempwar", "war_name_index 1 1");
@@ -234,8 +231,8 @@ void CBindChat::OnConsoleInit()
 
 	AddDefaultBind("tempmute", "addmute 1");
 	AddDefaultBind("mute", "addmute 0");
-	AddDefaultBind("delmute", "delmute 0");
-	AddDefaultBind("unmute", "delmute 0");
+	AddDefaultBind("delmute", "delmute");
+	AddDefaultBind("unmute", "delmute");
 
 	AddDefaultBind("clanwar", "war_clan_index 0 1");
 	AddDefaultBind("delclanwar", "remove_war_clan_index 1");

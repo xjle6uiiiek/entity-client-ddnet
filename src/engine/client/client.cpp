@@ -14,6 +14,7 @@
 #include <base/math.h>
 #include <base/str.h>
 #include <base/system.h>
+#include <base/windows.h>
 
 #include <engine/config.h>
 #include <engine/console.h>
@@ -212,6 +213,13 @@ void CClient::SendqxdInfo(int Conn)
 	SendMsg(Conn, &Msg, MSGFLAG_VITAL);
 }
 
+void CClient::SendFastInputsInfo(int Conn)
+{
+	CMsgPacker Msg(NETMSG_FOXNET_FASTINPUTS, true);
+	Msg.AddInt(g_Config.m_TcFastInput);
+	SendMsg(Conn, &Msg, MSGFLAG_VITAL);
+}
+
 void CClient::SendInfo(int Conn)
 {
 	SendqxdInfo(Conn); // E-Client
@@ -358,7 +366,7 @@ void CClient::SendInput()
 			m_aInputs[i][m_aCurrentInput[i]].m_Tick = m_aPredTick[g_Config.m_ClDummy];
 			m_aInputs[i][m_aCurrentInput[i]].m_PredictedTime = m_PredictedTime.Get(Now);
 			m_aInputs[i][m_aCurrentInput[i]].m_PredictionMargin = PredictionMargin() * time_freq() / 1000;
-			if(g_Config.m_ClSmoothPredictionMargin)
+			if(g_Config.m_TcSmoothPredictionMargin)
 				m_aInputs[i][m_aCurrentInput[i]].m_PredictionMargin = m_PredictedTime.GetMargin(Now);
 			m_aInputs[i][m_aCurrentInput[i]].m_Time = Now;
 
@@ -800,6 +808,10 @@ void CClient::DisconnectWithReason(const char *pReason)
 	// 0.7
 	m_TranslationContext.Reset();
 	m_Sixup = false;
+
+	// <FoxNet
+	m_FoxNetVersion = 0;
+	// FoxNet>
 }
 
 void CClient::Disconnect()
@@ -1985,6 +1997,9 @@ void CClient::ProcessServerPacket(CNetChunk *pPacket, int Conn, bool Dummy)
 					m_vMaplistEntries.clear();
 					GameClient()->ForceUpdateConsoleRemoteCompletionSuggestions();
 					m_ExpectedMaplistEntries = -1;
+					// <FoxNet
+					m_FoxNetVersion = 0;
+					// FoxNet>
 				}
 			}
 		}
@@ -2020,7 +2035,7 @@ void CClient::ProcessServerPacket(CNetChunk *pPacket, int Conn, bool Dummy)
 				if(m_aInputs[Conn][k].m_Tick == InputPredTick)
 				{
 					Target = m_aInputs[Conn][k].m_PredictedTime + (Now - m_aInputs[Conn][k].m_Time);
-					if(g_Config.m_ClSmoothPredictionMargin)
+					if(g_Config.m_TcSmoothPredictionMargin)
 						Target = Target - (int64_t)((TimeLeft / 1000.0f) * time_freq()) + m_aInputs[Conn][k].m_PredictionMargin;
 					else
 						Target = Target - (int64_t)((TimeLeft / 1000.0f) * time_freq());
@@ -2282,7 +2297,7 @@ void CClient::ProcessServerPacket(CNetChunk *pPacket, int Conn, bool Dummy)
 						m_pConsole->ExecuteLine(g_Config.m_ClRunOnJoin);
 						m_aCodeRunAfterJoinConsole[Conn] = true;
 					}
-					if((g_Config.m_ClEnabledInfo || g_Config.m_ClListsInfo) && !m_aOnJoinInfo[CONN_MAIN])
+					if(!m_aOnJoinInfo[CONN_MAIN])
 					{
 						GameClient()->SetLastMovementTime();
 						if(m_aReceivedSnapshots[Conn] > 10)
@@ -2347,6 +2362,15 @@ void CClient::ProcessServerPacket(CNetChunk *pPacket, int Conn, bool Dummy)
 		else if(Conn == CONN_MAIN && (pPacket->m_Flags & NET_CHUNKFLAG_VITAL) != 0 && Msg == NETMSG_MAPLIST_GROUP_END)
 		{
 			m_ExpectedMaplistEntries = -1;
+		}
+		// <FoxNet
+		else if(Conn == CONN_MAIN && (pPacket->m_Flags & NET_CHUNKFLAG_VITAL) != 0 && Msg == NETMSG_FOXNET_INFO)
+		{
+			const int Version = Unpacker.GetInt();
+			if(Unpacker.Error() || Version < 0)
+				return;
+			m_FoxNetVersion = Version;
+			SendFastInputsInfo(CONN_MAIN);
 		}
 	}
 	// the client handles only vital messages https://github.com/ddnet/ddnet/issues/11178
@@ -2885,7 +2909,7 @@ void CClient::Update()
 					SendInput();
 				}
 
-				if(g_Config.m_ClFastInput && GameClient()->CheckNewInput())
+				if(g_Config.m_TcFastInput && GameClient()->CheckNewInput())
 				{
 					Repredict = true;
 				}
@@ -5268,7 +5292,7 @@ void CClient::GetSmoothFreezeTick(int *pSmoothTick, float *pSmoothIntraTick, flo
 	int64_t PredTime = m_PredictedTime.Get(time_get());
 	GameTime = std::min(GameTime, PredTime);
 
-	int64_t UpperPredTime = std::clamp(PredTime - (time_freq() / 50) * g_Config.m_ClUnfreezeLagTicks, GameTime, PredTime);
+	int64_t UpperPredTime = std::clamp(PredTime - (time_freq() / 50) * g_Config.m_TcUnfreezeLagTicks, GameTime, PredTime);
 	int64_t LowestPredTime = std::clamp(PredTime, GameTime, UpperPredTime);
 	int64_t SmoothTime = std::clamp(LowestPredTime + (int64_t)(MixAmount * (PredTime - LowestPredTime)), LowestPredTime, PredTime);
 
@@ -5303,9 +5327,9 @@ int CClient::MaxLatencyTicks() const
 
 int CClient::PredictionMargin() const
 {
-	if(g_Config.m_ClPredMarginInFreeze && m_IsLocalFrozen)
+	if(g_Config.m_TcPredMarginInFreeze && m_IsLocalFrozen)
 	{
-		return g_Config.m_ClPredMarginInFreezeAmount;
+		return g_Config.m_TcPredMarginInFreezeAmount;
 	}
 	return g_Config.m_ClPredictionMargin;
 }
@@ -5421,16 +5445,16 @@ void CClient::ShellRegister()
 	}
 
 	bool Updated = false;
-	if(!shell_register_protocol("ddnet", aFullPath, &Updated))
+	if(!windows_shell_register_protocol("ddnet", aFullPath, &Updated))
 		log_error("client", "Failed to register ddnet protocol");
-	if(!shell_register_extension(".map", "Map File", GAME_NAME, aFullPath, &Updated))
+	if(!windows_shell_register_extension(".map", "Map File", GAME_NAME, aFullPath, &Updated))
 		log_error("client", "Failed to register .map file extension");
-	if(!shell_register_extension(".demo", "Demo File", GAME_NAME, aFullPath, &Updated))
+	if(!windows_shell_register_extension(".demo", "Demo File", GAME_NAME, aFullPath, &Updated))
 		log_error("client", "Failed to register .demo file extension");
-	if(!shell_register_application(GAME_NAME, aFullPath, &Updated))
+	if(!windows_shell_register_application(GAME_NAME, aFullPath, &Updated))
 		log_error("client", "Failed to register application");
 	if(Updated)
-		shell_update();
+		windows_shell_update();
 }
 
 void CClient::ShellUnregister()
@@ -5444,16 +5468,16 @@ void CClient::ShellUnregister()
 	}
 
 	bool Updated = false;
-	if(!shell_unregister_class("ddnet", &Updated))
+	if(!windows_shell_unregister_class("ddnet", &Updated))
 		log_error("client", "Failed to unregister ddnet protocol");
-	if(!shell_unregister_class(GAME_NAME ".map", &Updated))
+	if(!windows_shell_unregister_class(GAME_NAME ".map", &Updated))
 		log_error("client", "Failed to unregister .map file extension");
-	if(!shell_unregister_class(GAME_NAME ".demo", &Updated))
+	if(!windows_shell_unregister_class(GAME_NAME ".demo", &Updated))
 		log_error("client", "Failed to unregister .demo file extension");
-	if(!shell_unregister_application(aFullPath, &Updated))
+	if(!windows_shell_unregister_application(aFullPath, &Updated))
 		log_error("client", "Failed to unregister application");
 	if(Updated)
-		shell_update();
+		windows_shell_update();
 }
 #endif
 

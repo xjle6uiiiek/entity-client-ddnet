@@ -246,21 +246,6 @@ void CEClient::GoresMode()
 	}
 }
 
-void CEClient::ConchainGoresMode(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData)
-{
-	pfnCallback(pResult, pCallbackUserData);
-	CEClient *pSelf = (CEClient *)pUserData;
-	if(pResult->NumArguments())
-	{
-		int GoresMode = pResult->GetInteger(0);
-
-		if(GoresMode)
-			pSelf->GoresModeSave();
-		else
-			pSelf->GoresModeRestore();
-	}
-}
-
 void CEClient::GoresModeSave()
 {
 	int Key = g_Config.m_ClGoresModeKey;
@@ -293,12 +278,8 @@ void CEClient::GoresModeRestore()
 
 void CEClient::OnConnect()
 {
-	// if dummy, return, so it doesnt display the info when joining with dummy
-
 	if(g_Config.m_ClDummy)
 		return;
-
-	GameClient()->m_EClient.m_LastMovement = time_get();
 
 	// if current server is type "Gores", turn the config on, else turn it off
 	CServerInfo CurrentServerInfo;
@@ -307,7 +288,6 @@ void CEClient::OnConnect()
 	if(m_FirstLaunch && SentInfoMessage)
 	{
 		GameClient()->ClientMessage("╭──                 E-Client Info");
-		GameClient()->ClientMessage("│");
 		GameClient()->ClientMessage("│ Seems like it's your first time running the client!");
 		GameClient()->ClientMessage("│");
 		GameClient()->ClientMessage("│ To view a list of Default Chat Commands do \".help\"");
@@ -317,7 +297,6 @@ void CEClient::OnConnect()
 		GameClient()->ClientMessage("│ Chat Commands that start with \".\" are silent by default,");
 		GameClient()->ClientMessage("│ which means no one will see them.");
 		GameClient()->ClientMessage("│ Messages that start with \"!\" will be sent");
-		GameClient()->ClientMessage("│");
 		GameClient()->ClientMessage("╰───────────────────────");
 		SentInfoMessage = true;
 	}
@@ -325,7 +304,7 @@ void CEClient::OnConnect()
 	{
 		if(g_Config.m_ClAutoEnableGoresMode)
 		{
-			if(!str_comp(CurrentServerInfo.m_aGameType, "Gores"))
+			if(str_find(CurrentServerInfo.m_aGameType, "Gores"))
 			{
 				m_GoresServer = true;
 				g_Config.m_ClGoresMode = 1;
@@ -337,59 +316,9 @@ void CEClient::OnConnect()
 			}
 		}
 
-		// info when joining a server of enabled components
-
-		if(g_Config.m_ClEnabledInfo || g_Config.m_ClListsInfo)
-		{
-			GameClient()->ClientMessage("╭──               E-Client Info");
-			GameClient()->ClientMessage("│");
-
-			if(g_Config.m_ClListsInfo)
-			{
-				OnlineInfo(true);
-				GameClient()->ClientMessage("│");
-			}
-			if(g_Config.m_ClEnabledInfo)
-			{
-				// Freeze Kill
-				if((g_Config.m_ClFreezeKill && str_comp(Client()->GetCurrentMap(), "Multeasymap") == 0 && g_Config.m_ClFreezeKillMultOnly) || (!g_Config.m_ClFreezeKillMultOnly && g_Config.m_ClFreezeKill))
-				{
-					GameClient()->ClientMessage("│ Freeze Kill Enabled!");
-					GameClient()->ClientMessage("│");
-				}
-				else if(g_Config.m_ClFreezeKill && (g_Config.m_ClFreezeKillMultOnly && str_comp(Client()->GetCurrentMap(), "Multeasymap") != 0))
-				{
-					GameClient()->ClientMessage("│ Freeze Kill Disabled, Not on Mult!");
-					GameClient()->ClientMessage("│");
-				}
-				if(!g_Config.m_ClFreezeKill)
-				{
-					GameClient()->ClientMessage("│ Freeze Kill Disabled!");
-					GameClient()->ClientMessage("│");
-				}
-				if(g_Config.m_ClGoresMode)
-				{
-					GameClient()->ClientMessage("│ Gores Mode: ON");
-					GameClient()->ClientMessage("│");
-				}
-				else
-				{
-					GameClient()->ClientMessage("│ Gores Mode: OFF");
-					GameClient()->ClientMessage("│");
-				}
-				if(g_Config.m_ClChatBubble)
-				{
-					GameClient()->ClientMessage("│ Chat Bubble is Currently: ON");
-					GameClient()->ClientMessage("│");
-				}
-				else
-				{
-					GameClient()->ClientMessage("│ Chat Bubble is Currently: OFF");
-					GameClient()->ClientMessage("│");
-				}
-			}
-			GameClient()->ClientMessage("╰───────────────────────");
-		}
+	
+		if(g_Config.m_ClListsInfo)
+			OnlineInfo();
 	}
 }
 
@@ -570,16 +499,6 @@ void CEClient::OnStateChange(int NewState, int OldState)
 		m_AttemptedJoinTeam = false;
 		m_LastReplyId = -1;
 		m_aLastPing = CLastPing();
-	}
-
-	if(NewState == IClient::STATE_ONLINE)
-	{
-		CServerInfo CurrentServerInfo;
-		Client()->GetServerInfo(&CurrentServerInfo);
-
-		m_FoxNetServer = false;
-		if(!str_comp(CurrentServerInfo.m_aGameType, "FoxNet"))
-			m_FoxNetServer = true;
 	}
 }
 

@@ -827,8 +827,12 @@ public:
 	 * If 3 its limited to the size of the settings menu (ToDo)
 	 *
 	 */
-	void RenderECTee(CUIRect MainView, vec2 SpawnPos, const CAnimState *pAnim, CTeeRenderInfo *pInfo, int Draggable = 0, float TeeSize = 75.0f, float Alpha = 1.0f);
-	bool ResetTeePos;
+
+	vec2 TeeEyeDirection(vec2 Pos);
+
+	void RenderDraggableTee(CUIRect MainView, vec2 SpawnPos, vec2 TeeDirection, const CAnimState *pAnim, CTeeRenderInfo *pInfo, int EyeEmote, bool HappyHover = true);
+	void RenderTee(vec2 Pos, vec2 TeeDirection, const CAnimState *pAnim, CTeeRenderInfo *pInfo, int EyeEmote, bool HappyHover = true);
+	bool m_ResetTeePos;
 
 	void RenderChatPreview(CUIRect MainView);
 	void RenderSettingsEntity(CUIRect MainView);
@@ -847,8 +851,6 @@ public:
 	const CWarType *m_pRemoveWarType = nullptr;
 	void PopupConfirmRemoveWarType();
 	int DoButtonLineSize_Menu(CButtonContainer *pButtonContainer, const char *pText, int Checked, const CUIRect *pRect, float LineSize, bool Fake = false, const char *pImageName = nullptr, int Corners = IGraphics::CORNER_ALL, float Rounding = 5.0f, float FontFactor = 0.0f, ColorRGBA Color = ColorRGBA(1.0f, 1.0f, 1.0f, 0.5f));
-	void RenderDevSkin(vec2 RenderPos, float Size, const char *pSkinName, const char *pBackupSkin, bool CustomColors, int FeetColor, int BodyColor, int Emote, bool Rainbow,
-		ColorRGBA ColorFeet = ColorRGBA(0, 0, 0, 0), ColorRGBA ColorBody = ColorRGBA(0, 0, 0, 0));
 	void RenderFontIcon(const CUIRect Rect, const char *pText, float Size, int Align);
 
 	int DoButtonNoRect_FontIcon(CButtonContainer *pButtonContainer, const char *pText, int Checked, const CUIRect *pRect, int Corners = IGraphics::CORNER_ALL);
@@ -874,6 +876,8 @@ public:
 		char m_aGameType[16];
 		char m_aMap[MAX_MAP_LENGTH];
 
+		int m_ServerIndex;
+
 		char m_aCommunityId[32];
 
 		bool m_IsPlayer;
@@ -897,6 +901,7 @@ public:
 			str_copy(m_aGameType, pServer->m_aGameType);
 			str_copy(m_aMap, pServer->m_aMap);
 			str_copy(m_aCommunityId, pServer->m_aCommunityId);
+			m_ServerIndex = pServer->m_ServerIndex;
 			m_IsPlayer = pOnlineClient->m_Player;
 			m_IsAfk = pOnlineClient->m_Afk;
 			str_copy(m_aSkin, pOnlineClient->m_aSkin);
@@ -926,8 +931,8 @@ public:
 			return Result < 0 || (Result == 0 && str_comp_nocase(m_aClan, Other.m_aClan) < 0);
 		}
 	};
-
-	bool m_WarlistInitialized = false;
+	
+	int64_t m_ScheduledUpdate = 0;
 	std::vector<CWarlistCache> m_vWarlistCache;
 	const CWarlistCache *m_pRemoveEntry = nullptr;
 

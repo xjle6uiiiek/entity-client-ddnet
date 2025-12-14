@@ -72,22 +72,23 @@
 // Entity
 #include "components/entity/anti_spawn_block.h"
 #include "components/entity/chat_bubbles.h"
-#include "components/entity/quick_actions.h"
 #include "components/entity/entity.h"
 #include "components/entity/freeze_kill.h"
-#include "components/entity/mapconfig.h"
 #include "components/entity/info.h"
+#include "components/entity/mapconfig.h"
+#include "components/entity/quick_actions.h"
 
 // Tater
+#include "components/tclient/bg_draw.h"
 #include "components/tclient/bindchat.h"
 #include "components/tclient/bindwheel.h"
+#include "components/tclient/custom_communities.h"
 #include "components/tclient/outlines.h"
 #include "components/tclient/player_indicator.h"
 #include "components/tclient/rainbow.h"
 #include "components/tclient/skinprofiles.h"
 #include "components/tclient/statusbar.h"
 #include "components/tclient/warlist.h"
-#include "components/tclient/custom_communities.h"
 
 class CGameInfo
 {
@@ -216,6 +217,7 @@ public:
 	// T-Client
 	CBindChat m_Bindchat;
 	CBindWheel m_Bindwheel;
+	CBgDraw m_BgDraw;
 	CPlayerIndicator m_PlayerIndicator;
 	COutlines m_Outlines;
 	CRainbow m_Rainbow;
@@ -292,6 +294,8 @@ private:
 
 	static void ConchainMenuMap(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
 
+	static std::function<bool(int, int, int, int)> GetScoreComparator(bool TimeScore, bool ReceivedMillisecondFinishTimes, bool Race7);
+
 	// only used in OnPredict
 	vec2 m_aLastPos[MAX_CLIENTS];
 	bool m_aLastActive[MAX_CLIENTS];
@@ -299,7 +303,7 @@ private:
 	// only used in OnNewSnapshot
 	bool m_GameOver = false;
 	bool m_GamePaused = false;
-	int m_PrevLocalId = -1;
+	int m_PrevLocalId = -1; // TClient
 
 public:
 	IKernel *Kernel() { return IInterface::Kernel(); }
@@ -385,6 +389,7 @@ public:
 
 		const CNetObj_PlayerInfo *m_apPlayerInfos[MAX_CLIENTS];
 		const CNetObj_PlayerInfo *m_apPrevPlayerInfos[MAX_CLIENTS];
+
 		const CNetObj_PlayerInfo *m_apInfoByScore[MAX_CLIENTS];
 		const CNetObj_PlayerInfo *m_apInfoByName[MAX_CLIENTS];
 		const CNetObj_PlayerInfo *m_apInfoByDDTeamScore[MAX_CLIENTS];
@@ -530,6 +535,9 @@ public:
 		bool m_Afk;
 		bool m_Paused;
 		bool m_Spec;
+
+		int m_FinishTimeSeconds;
+		int m_FinishTimeMillis;
 
 		// Editor allows 256 switches for now.
 		bool m_aSwitchStates[256];
@@ -707,6 +715,7 @@ public:
 	CNetObj_PlayerInput m_HammerInput;
 	unsigned int m_DummyFire;
 	bool m_ReceivedDDNetPlayer;
+	bool m_ReceivedDDNetPlayerFinishTimes;
 
 	class CTeamsCore m_Teams;
 
@@ -743,19 +752,6 @@ public:
 	int SwitchStateTeam() const;
 	bool IsLocalCharSuper() const;
 	bool CanDisplayWarning() const override;
-
-	// E-Client
-	void OnServerBrowserUpdate() override;
-
-	void ClientMessage(const char *pString) override;
-	void OnJoinInfo() override;
-	void SetLastMovementTime() override;
-
-	void RequestEClientInfo() override;
-
-	// Get ClientId by Player Name
-	int GetClientId(const char *pName) override;
-	const char *GetClientName(int ClientId) override;
 
 	CNetObjHandler *GetNetObjHandler() override;
 	protocol7::CNetObjHandler *GetNetObjHandler7() override;
@@ -967,7 +963,7 @@ private:
 	int m_aLastUpdateTick[MAX_CLIENTS] = {0};
 	void DetectStrongHook();
 
-	int m_PredictedDummyId;
+	int m_PredictedDummyId; // TClient
 	int m_IsDummySwapping;
 	CCharOrder m_CharOrder;
 	int m_aSwitchStateTeam[NUM_DUMMIES];
@@ -1011,6 +1007,20 @@ private:
 
 	void OnSaveCodeNetMessage(const CNetMsg_Sv_SaveCode *pMsg);
 	void StoreSave(const char *pTeamMembers, const char *pGeneratedCode) const;
+
+public:
+	// E-Client
+	void OnServerBrowserUpdate() override;
+
+	void ClientMessage(const char *pString) override;
+	void OnJoinInfo() override;
+	void SetLastMovementTime() override;
+
+	void RequestEClientInfo() override;
+
+	// Get ClientId by Player Name
+	int GetClientId(const char *pName) override;
+	const char *GetClientName(int ClientId) override;
 };
 
 ColorRGBA CalculateNameColor(ColorHSLA TextColorHSL);

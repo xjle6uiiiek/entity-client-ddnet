@@ -2030,6 +2030,8 @@ set_src(BASE GLOB_RECURSE src/base
   log.h
   logger.h
   math.h
+  mem.cpp
+  mem.h
   rust.h
   str.cpp
   str.h
@@ -2044,6 +2046,8 @@ set_src(BASE GLOB_RECURSE src/base
   unicode/tolower_data.cpp
   unicode/tolower_data.h
   vmath.h
+  windows.cpp
+  windows.h
 )
 set_src(ENGINE_INTERFACE GLOB src/engine
   antibot.h
@@ -2169,6 +2173,12 @@ set_src(ENGINE_SHARED GLOB_RECURSE src/engine/shared
   websockets.cpp
   websockets.h
 )
+
+set_src(ENGINE_EXTERNAL GLOB src/engine/external
+  spt.cpp
+  spt.h
+)
+
 set_src(ENGINE_GFX GLOB src/engine/gfx
   image.cpp
   image_loader.cpp
@@ -2250,7 +2260,7 @@ set(LIBS
 # Targets
 add_library(engine-gfx EXCLUDE_FROM_ALL OBJECT ${ENGINE_GFX})
 target_include_directories(engine-gfx PRIVATE ${PNG_INCLUDE_DIRS})
-add_library(engine-shared EXCLUDE_FROM_ALL OBJECT ${ENGINE_INTERFACE} ${ENGINE_SHARED} ${ENGINE_UUID_SHARED} ${BASE})
+add_library(engine-shared EXCLUDE_FROM_ALL OBJECT ${ENGINE_EXTERNAL} ${ENGINE_INTERFACE} ${ENGINE_SHARED} ${ENGINE_UUID_SHARED} ${BASE})
 add_library(game-shared EXCLUDE_FROM_ALL OBJECT ${GAME_SHARED} ${GAME_GENERATED_SHARED})
 list(APPEND TARGETS_OWN engine-gfx engine-shared game-shared)
 
@@ -2466,6 +2476,10 @@ if(CLIENT)
     components/spectator.h
     components/statboard.cpp
     components/statboard.h
+    components/tclient/bg_draw.cpp
+    components/tclient/bg_draw.h
+    components/tclient/bg_draw_file.cpp
+    components/tclient/bg_draw_file.h
     components/tclient/bindchat.cpp
     components/tclient/bindchat.h
     components/tclient/bindwheel.cpp
@@ -3111,7 +3125,7 @@ if((GTEST_FOUND OR DOWNLOAD_GTEST) AND SERVER)
     mapbugs_test.cpp
     mapitems_test.cpp
     math_test.cpp
-    memory_test.cpp
+    mem_test.cpp
     name_ban_test.cpp
     net_test.cpp
     netaddr_test.cpp
