@@ -2159,7 +2159,7 @@ void CMenus::RenderSettingsEClient(CUIRect MainView)
 		static float Offset = 0.0f;
 
 		Automation.VMargin(5.0f, &Automation);
-		Automation.HSplitTop(225.0f + Offset, &Automation, &ChatSettings);
+		Automation.HSplitTop(245.0f + Offset, &Automation, &ChatSettings);
 		if(s_ScrollRegion.AddRect(Automation))
 		{
 			Offset = 0.0f;
@@ -2216,7 +2216,7 @@ void CMenus::RenderSettingsEClient(CUIRect MainView)
 				{
 					{
 						const char *Name = g_Config.m_ClNotifyOnJoin ? "Notify on Join Name" : "Notify on Join";
-						float Length = TextRender()->TextBoundingBox(FontSize, "Notify on Join Name").m_W + 27.5f; // Give it some breathing room
+						float Length = TextRender()->TextBoundingBox(FontSize, "Notify on Join Name").m_W + 7.5f; // Give it some breathing room
 
 						Automation.HSplitTop(19.9f, &Button, &MainView);
 
@@ -2259,7 +2259,8 @@ void CMenus::RenderSettingsEClient(CUIRect MainView)
 				}
 				Automation.HSplitTop(25.0f, &Button, &Automation);
 				{
-					float Length = TextRender()->TextBoundingBox(FontSize, "Run on Join Console").m_W + 20.0f; // Give it some breathing room
+					const char *pN = "Execute before connect";
+					float Length = TextRender()->TextBoundingBox(12.5f, pN).m_W + 3.5f; // Give it some breathing room
 
 					Automation.HSplitTop(20.0f, &Button, &MainView);
 
@@ -2268,12 +2269,35 @@ void CMenus::RenderSettingsEClient(CUIRect MainView)
 					Button.VSplitRight(0.0f, &Button, &MainView);
 
 					static CLineInput s_ReplyMsg;
-					s_ReplyMsg.SetBuffer(g_Config.m_ClRunOnJoinMsg, sizeof(g_Config.m_ClRunOnJoinMsg));
+					s_ReplyMsg.SetBuffer(g_Config.m_ClExecuteOnConnect, sizeof(g_Config.m_ClExecuteOnConnect));
 					s_ReplyMsg.SetEmptyText("Any Console Command");
 
-					if(DoButton_CheckBox(&g_Config.m_ClRunOnJoinConsole, "Run on Join Console", g_Config.m_ClRunOnJoinConsole, &Automation))
-						g_Config.m_ClRunOnJoinConsole ^= 1;
 					Ui()->DoEditBox(&s_ReplyMsg, &Button, EditBoxFontSize);
+
+					Automation.HSplitTop(3.0f, &Button, &Automation);
+					Ui()->DoLabel(&Automation, pN, 12.5f, TEXTALIGN_LEFT);
+					Automation.HSplitTop(-3.0f, &Button, &Automation);
+				}
+				Automation.HSplitTop(25.0f, &Button, &Automation);
+				{
+					const char *pN = "Execute on join";
+					float Length = TextRender()->TextBoundingBox(12.5f, pN).m_W + 3.5f; // Give it some breathing room
+
+					Automation.HSplitTop(20.0f, &Button, &MainView);
+
+					Button.VSplitLeft(0.0f, 0, &Automation);
+					Button.VSplitLeft(Length, &Label, &Button);
+					Button.VSplitRight(0.0f, &Button, &MainView);
+
+					static CLineInput s_ReplyMsg;
+					s_ReplyMsg.SetBuffer(g_Config.m_ClRunOnJoinConsole, sizeof(g_Config.m_ClRunOnJoinConsole));
+					s_ReplyMsg.SetEmptyText("Any Console Command");
+
+					Ui()->DoEditBox(&s_ReplyMsg, &Button, EditBoxFontSize);
+
+					Automation.HSplitTop(3.0f, &Button, &Automation);
+					Ui()->DoLabel(&Automation, pN, 12.5f, TEXTALIGN_LEFT);
+					Automation.HSplitTop(-3.0f, &Button, &Automation);
 				}
 				Automation.HSplitTop(25.0f, &Button, &Automation);
 				{
@@ -2765,6 +2789,16 @@ void CMenus::RenderSettingsVisual(CUIRect MainView)
 			Cosmetics.HSplitTop(LineSize, &EffectDropDownRect, &Cosmetics);
 			const int EffectSelectedNew = Ui()->DoDropDown(&EffectDropDownRect, EffectSelectedOld, s_EffectDropDownNames.data(), s_EffectDropDownNames.size(), s_EffectDropDownState);
 			Ui()->UpdatePopupMenuOffset(&s_EffectDropDownState.m_SelectionPopupContext, EffectDropDownRect.x, EffectDropDownRect.y);
+			
+			if(s_ScrollRegion.ClipRect())
+			{
+				const float y = EffectDropDownRect.y + 20.0f;
+				if(y < s_ScrollRegion.ClipRect()->y || y > (s_ScrollRegion.ClipRect()->y + s_ScrollRegion.ClipRect()->h))
+				{
+					Ui()->ClosePopupMenu(&s_EffectDropDownState.m_SelectionPopupContext);
+				}
+			}
+			
 			if(EffectSelectedOld != EffectSelectedNew)
 			{
 				g_Config.m_ClEffect = EffectSelectedNew;
@@ -2815,11 +2849,20 @@ void CMenus::RenderSettingsVisual(CUIRect MainView)
 			Cosmetics.HSplitTop(LineSize, &RainbowDropDownRect, &Cosmetics);
 			const int RainbowSelectedNew = Ui()->DoDropDown(&RainbowDropDownRect, RainbowSelectedOld, s_RainbowDropDownNames.data(), s_RainbowDropDownNames.size(), s_RainbowDropDownState);
 			Ui()->UpdatePopupMenuOffset(&s_RainbowDropDownState.m_SelectionPopupContext, RainbowDropDownRect.x, RainbowDropDownRect.y);
+			
+			if(s_ScrollRegion.ClipRect())
+			{
+				const float y = RainbowDropDownRect.y + 20.0f;
+				if(y < s_ScrollRegion.ClipRect()->y || y > (s_ScrollRegion.ClipRect()->y + s_ScrollRegion.ClipRect()->h))
+				{
+					Ui()->ClosePopupMenu(&s_RainbowDropDownState.m_SelectionPopupContext);
+				}
+			}
+			
 			if(RainbowSelectedOld != RainbowSelectedNew)
 			{
 				g_Config.m_ClRainbowMode = RainbowSelectedNew + 1;
 				RainbowSelectedOld = RainbowSelectedNew;
-				dbg_msg("rainbow", "rainbow mode changed to %d", g_Config.m_ClRainbowMode);
 			}
 			Cosmetics.HSplitTop(MarginExtraSmall, nullptr, &Cosmetics);
 			Cosmetics.HSplitTop(LineSize, &Button, &Cosmetics);
@@ -3186,7 +3229,7 @@ void CMenus::RenderSettingsVisual(CUIRect MainView)
 	{
 		static float Offset = 0.0f;
 		Miscellaneous.VMargin(5.0f, &Miscellaneous);
-		Miscellaneous.HSplitTop(145.0f + Offset, &Miscellaneous, &DiscordRpc);
+		Miscellaneous.HSplitTop(135.0f + Offset, &Miscellaneous, &DiscordRpc);
 		if(s_ScrollRegion.AddRect(Miscellaneous))
 		{
 			Offset = 0.0f;
@@ -3224,6 +3267,16 @@ void CMenus::RenderSettingsVisual(CUIRect MainView)
 					Ui()->DoLabel(&Label, Localize("Custom Font:"), FontSize, TEXTALIGN_ML);
 					const int FontSelectedNew = Ui()->DoDropDown(&FontDropDownRect, FontSelectedOld, s_FontDropDownNames.data(), s_FontDropDownNames.size(), s_FontDropDownState);
 					Ui()->UpdatePopupMenuOffset(&s_FontDropDownState.m_SelectionPopupContext, FontDropDownRect.x, FontDropDownRect.y);
+					
+					if(s_ScrollRegion.ClipRect())
+					{
+						const float y = FontDropDownRect.y + 20.0f;
+						if(y < s_ScrollRegion.ClipRect()->y || y > (s_ScrollRegion.ClipRect()->y + s_ScrollRegion.ClipRect()->h))
+						{
+							Ui()->ClosePopupMenu(&s_FontDropDownState.m_SelectionPopupContext);
+						}
+					}
+					
 					if(FontSelectedOld != FontSelectedNew)
 					{
 						str_copy(g_Config.m_ClCustomFont, s_FontDropDownNames[FontSelectedNew]);
@@ -3251,7 +3304,7 @@ void CMenus::RenderSettingsVisual(CUIRect MainView)
 				DoButton_CheckBoxAutoVMarginAndSet(&g_Config.m_ClFreezeStars, Localize("Freeze stars"), &g_Config.m_ClFreezeStars, &Miscellaneous, LineSize);
 				DoButton_CheckBoxAutoVMarginAndSet(&g_Config.m_TcFreezeKatana, Localize("Show katana on frozen players"), &g_Config.m_TcFreezeKatana, &Miscellaneous, LineSize);
 
-				Miscellaneous.HSplitTop(25.f, &Button, &Miscellaneous);
+				Miscellaneous.HSplitTop(LineSize, &Button, &Miscellaneous);
 				Ui()->DoScrollbarOption(&g_Config.m_ClRenderCursorSpec, &g_Config.m_ClRenderCursorSpec, &Button, Localize("Cursor Opacity in Spec"), 0, 100, &CUi::ms_LinearScrollbarScale, 0u, "");
 			}
 		}

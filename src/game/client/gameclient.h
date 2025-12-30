@@ -15,7 +15,6 @@
 #include <engine/shared/snapshot.h>
 
 #include <generated/protocol7.h>
-#include <generated/protocolglue.h>
 
 #include <game/client/prediction/gameworld.h>
 #include <game/client/race.h>
@@ -75,10 +74,10 @@
 #include "components/entity/entity.h"
 #include "components/entity/freeze_kill.h"
 #include "components/entity/info.h"
-#include "components/entity/mapconfig.h"
 #include "components/entity/quick_actions.h"
 
 // Tater
+#include "component.h"
 #include "components/tclient/bg_draw.h"
 #include "components/tclient/bindchat.h"
 #include "components/tclient/bindwheel.h"
@@ -86,9 +85,42 @@
 #include "components/tclient/outlines.h"
 #include "components/tclient/player_indicator.h"
 #include "components/tclient/rainbow.h"
+#include "components/tclient/scripting.h"
 #include "components/tclient/skinprofiles.h"
 #include "components/tclient/statusbar.h"
 #include "components/tclient/warlist.h"
+#include "ui.h"
+
+#include <base/types.h>
+
+#include <engine/client/client.h>
+#include <engine/client/serverbrowser.h>
+#include <engine/config.h>
+#include <engine/demo.h>
+#include <engine/editor.h>
+#include <engine/friends.h>
+#include <engine/graphics.h>
+#include <engine/http.h>
+#include <engine/input.h>
+#include <engine/kernel.h>
+#include <engine/serverbrowser.h>
+#include <engine/shared/packer.h>
+#include <engine/shared/protocol.h>
+#include <engine/shared/protocol7.h>
+#include <engine/sound.h>
+#include <engine/storage.h>
+#include <engine/textrender.h>
+
+#include <generated/protocol.h>
+
+#include <game/map/render_interfaces.h>
+
+#include <bitset>
+#include <cstdint>
+#include <functional>
+#include <memory>
+#include <optional>
+#include <vector>
 
 class CGameInfo
 {
@@ -212,7 +244,6 @@ public:
 	CAntiSpawnBlock m_AntiSpawnBlock;
 	CFreezeKill m_FreezeKill;
 	CEntityInfo m_EntityInfo;
-	CMapConfig m_MapConfig;
 
 	// T-Client
 	CBindChat m_Bindchat;
@@ -224,6 +255,7 @@ public:
 	CSkinProfiles m_SkinProfiles;
 	CStatusBar m_StatusBar;
 	CWarList m_WarList;
+	CScripting m_Scripting;
 	CCustomCommunities m_CustomCommunities;
 
 private:
@@ -585,10 +617,6 @@ public:
 
 	CClientData m_aClients[MAX_CLIENTS];
 
-	// TClient
-	int m_SmoothTick[2] = {};
-	float m_SmoothIntraTick[2] = {};
-
 	class CClientStats
 	{
 		int m_IngameTicks;
@@ -731,7 +759,7 @@ public:
 	bool AntiPingWeapons() const { return g_Config.m_ClAntiPing && g_Config.m_ClAntiPingWeapons && !m_Snap.m_SpecInfo.m_Active && Client()->State() != IClient::STATE_DEMOPLAYBACK; }
 	bool AntiPingGunfire() const { return AntiPingGrenade() && AntiPingWeapons() && g_Config.m_ClAntiPingGunfire; }
 	bool Predict() const;
-	bool PredictDummy() const { return g_Config.m_ClPredictDummy && Client()->DummyConnected() && m_Snap.m_LocalClientId >= 0 && m_PredictedDummyId >= 0 && !m_aClients[m_PredictedDummyId].m_Paused; }
+	bool PredictDummy() const { return g_Config.m_ClPredictDummy && Client()->DummyConnected() && m_Snap.m_LocalClientId >= 0 && m_aLocalIds[!g_Config.m_ClDummy] >= 0 && !m_aClients[m_aLocalIds[!g_Config.m_ClDummy]].m_Paused; }
 	const CTuningParams *GetTuning(int i) const { return &m_aTuningList[i]; }
 	ColorRGBA GetDDTeamColor(int DDTeam, float Lightness = 0.5f) const;
 	void FormatClientId(int ClientId, char (&aClientId)[16], EClientIdFormat Format) const;
@@ -755,8 +783,6 @@ public:
 
 	CNetObjHandler *GetNetObjHandler() override;
 	protocol7::CNetObjHandler *GetNetObjHandler7() override;
-
-	bool CheckNewInput() override;
 
 	void LoadGameSkin(const char *pPath, bool AsDir = false);
 	void LoadEmoticonsSkin(const char *pPath, bool AsDir = false);
@@ -963,7 +989,6 @@ private:
 	int m_aLastUpdateTick[MAX_CLIENTS] = {0};
 	void DetectStrongHook();
 
-	int m_PredictedDummyId; // TClient
 	int m_IsDummySwapping;
 	CCharOrder m_CharOrder;
 	int m_aSwitchStateTeam[NUM_DUMMIES];
@@ -1009,6 +1034,13 @@ private:
 	void StoreSave(const char *pTeamMembers, const char *pGeneratedCode) const;
 
 public:
+	// TClient
+	int m_SmoothTick[2] = {};
+	float m_SmoothIntraTick[2] = {};
+	bool CheckNewInput() override;
+	std::optional<CServerInfo> m_ConnectServerInfo = std::nullopt;
+	void SetConnectInfo(const NETADDR *pAddress) override;
+
 	// E-Client
 	void OnServerBrowserUpdate() override;
 

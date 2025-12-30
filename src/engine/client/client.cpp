@@ -224,11 +224,6 @@ void CClient::SendInfo(int Conn)
 {
 	SendqxdInfo(Conn); // E-Client
 
-	if(!str_comp(g_Config.m_Password, ""))
-		str_copy(g_Config.m_Password, g_Config.m_ClPermaPassword);
-	if(!str_comp(m_aPassword, ""))
-		str_copy(m_aPassword, g_Config.m_ClPermaPassword);
-
 	CMsgPacker MsgVer(NETMSG_CLIENTVER, true);
 	MsgVer.AddRaw(&m_ConnectionId, sizeof(m_ConnectionId));
 	MsgVer.AddInt(GameClient()->DDNetVersion());
@@ -722,6 +717,15 @@ void CClient::Connect(const char *pAddress, const char *pPassword)
 
 	m_ConnectionId = RandomUuid();
 	ServerInfoRequest();
+
+	// TClient
+	// If user has manually specified password don't run autoexec
+	if(!m_SendPassword)
+	{
+		m_pGameClient->SetConnectInfo(&aConnectAddrs[0]);
+		m_pConsole->ExecuteLine(g_Config.m_ClExecuteOnConnect, IConsole::CLIENT_ID_UNSPECIFIED);
+	}
+	m_pGameClient->SetConnectInfo(nullptr);
 
 	if(m_SendPassword)
 	{
@@ -2292,9 +2296,9 @@ void CClient::ProcessServerPacket(CNetChunk *pPacket, int Conn, bool Dummy)
 						m_aDidPostConnect[Conn] = true;
 					}
 
-					if(g_Config.m_ClRunOnJoinConsole && m_aReceivedSnapshots[Conn] > g_Config.m_ClRunOnJoinDelay && !m_aCodeRunAfterJoinConsole[Conn])
+					if(g_Config.m_ClRunOnJoinConsole[0] && m_aReceivedSnapshots[Conn] > g_Config.m_ClRunOnJoinConsoleDelay && !m_aCodeRunAfterJoinConsole[Conn])
 					{
-						m_pConsole->ExecuteLine(g_Config.m_ClRunOnJoin);
+						m_pConsole->ExecuteLine(g_Config.m_ClRunOnJoinConsole, IConsole::CLIENT_ID_UNSPECIFIED);
 						m_aCodeRunAfterJoinConsole[Conn] = true;
 					}
 					if(!m_aOnJoinInfo[CONN_MAIN])
@@ -5016,7 +5020,7 @@ int main(int argc, const char **argv)
 	{
 		if(!pStorage->FileExists(s_aConfigDomains[ConfigDomain].m_aConfigPath, IStorage::TYPE_ALL))
 			continue;
-		if(!pConsole->ExecuteFile(s_aConfigDomains[ConfigDomain].m_aConfigPath))
+		if(!pConsole->ExecuteFile(s_aConfigDomains[ConfigDomain].m_aConfigPath, IConsole::CLIENT_ID_UNSPECIFIED))
 		{
 			char aError[2048];
 			snprintf(aError, sizeof(aError), "Failed to load config from '%s'.", s_aConfigDomains[ConfigDomain].m_aConfigPath);
@@ -5031,11 +5035,11 @@ int main(int argc, const char **argv)
 	// execute autoexec file
 	if(pStorage->FileExists(AUTOEXEC_CLIENT_FILE, IStorage::TYPE_ALL))
 	{
-		pConsole->ExecuteFile(AUTOEXEC_CLIENT_FILE);
+		pConsole->ExecuteFile(AUTOEXEC_CLIENT_FILE, IConsole::CLIENT_ID_UNSPECIFIED);
 	}
 	else // fallback
 	{
-		pConsole->ExecuteFile(AUTOEXEC_FILE);
+		pConsole->ExecuteFile(AUTOEXEC_FILE, IConsole::CLIENT_ID_UNSPECIFIED);
 	}
 
 	if(g_Config.m_ClConfigVersion < 1)

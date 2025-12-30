@@ -290,7 +290,9 @@ if(NOT MSVC AND NOT HAIKU)
   endif()
 
   # Disable exceptions as DDNet does not use them.
-  add_cxx_compiler_flag_if_supported(OUR_FLAGS -fno-exceptions)
+  # Haha, but we need them -Tater
+  # Whatever that guy said -qxdFox
+  # add_cxx_compiler_flag_if_supported(OUR_FLAGS -fno-exceptions)
 
   # Inaccurate floating point numbers cause problems on mingw-w64-gcc when
   # compiling for x86, might cause problems elsewhere. So don't store floats
@@ -307,6 +309,10 @@ if(NOT MSVC AND NOT HAIKU)
   # Don't insert timestamps into PEs to keep the build reproducible.
   if(TARGET_OS STREQUAL "windows")
     add_cxx_compiler_flag_if_supported(OUR_FLAGS_LINK -Wl,--no-insert-timestamp)
+  endif()
+
+  if(NOT CMAKE_BUILD_TYPE STREQUAL Debug AND NOT DEV)
+    add_cxx_compiler_flag_if_supported(OUR_FLAGS -ffile-prefix-map=${CMAKE_SOURCE_DIR}=/${CMAKE_PROJECT_NAME})
   endif()
 
   if(TARGET_OS STREQUAL "mac")
@@ -881,12 +887,12 @@ list(APPEND TARGETS_OWN rust-bridge-shared)
 
 if(TARGET_OS STREQUAL "android")
   set(CARGO_BUILD_DIR "${CARGO_NDK_TARGET}/")
-  set(CARGO_BUILD ${CMAKE_COMMAND} -E env CARGO_TARGET_DIR=${PROJECT_BINARY_DIR} DDNET_TEST_NO_LINK=1 ${RUST_CARGO} ndk --manifest-path "${PROJECT_SOURCE_DIR}/Cargo.toml" --target ${CARGO_NDK_TARGET} --platform ${CARGO_NDK_API} build)
-  set(CARGO_TEST ${CMAKE_COMMAND} -E env CARGO_TARGET_DIR=${PROJECT_BINARY_DIR} ${RUST_CARGO} ndk --target ${CARGO_NDK_TARGET} --platform ${CARGO_NDK_API} test)
+  set(CARGO_BUILD ${CMAKE_COMMAND} -E env CARGO_TARGET_DIR=${PROJECT_BINARY_DIR} DDNET_TEST_NO_LINK=1 ${RUST_CARGO} ndk --manifest-path "${PROJECT_SOURCE_DIR}/Cargo.toml" --target ${CARGO_NDK_TARGET} --platform ${CARGO_NDK_API} build --locked)
+  set(CARGO_TEST ${CMAKE_COMMAND} -E env CARGO_TARGET_DIR=${PROJECT_BINARY_DIR} ${RUST_CARGO} ndk --target ${CARGO_NDK_TARGET} --platform ${CARGO_NDK_API} test --locked)
 else()
   set(CARGO_BUILD_DIR "")
-  set(CARGO_BUILD ${CMAKE_COMMAND} -E env CARGO_TARGET_DIR=${PROJECT_BINARY_DIR} DDNET_TEST_NO_LINK=1 ${RUST_CARGO} build --manifest-path "${PROJECT_SOURCE_DIR}/Cargo.toml")
-  set(CARGO_TEST ${CMAKE_COMMAND} -E env CARGO_TARGET_DIR=${PROJECT_BINARY_DIR} ${RUST_CARGO} test)
+  set(CARGO_BUILD ${CMAKE_COMMAND} -E env CARGO_TARGET_DIR=${PROJECT_BINARY_DIR} DDNET_TEST_NO_LINK=1 ${RUST_CARGO} build --locked --manifest-path "${PROJECT_SOURCE_DIR}/Cargo.toml")
+  set(CARGO_TEST ${CMAKE_COMMAND} -E env CARGO_TARGET_DIR=${PROJECT_BINARY_DIR} ${RUST_CARGO} test --locked)
 endif()
 if(MSVC)
   list(INSERT CARGO_BUILD 0 ${CMAKE_COMMAND} -E env $<$<CONFIG:Debug>:CFLAGS=/MTd> $<$<CONFIG:Debug>:CXXFLAGS=/MTd>)
@@ -1446,6 +1452,8 @@ set(EXPECTED_DATA
   emoticons.png
   entity/binds/.extra.cfg
   entity/binds/.help.cfg
+  entity/builtinscripts/firetext.chai
+  entity/builtinscripts/smartspec.chai
   entity/fonts/Cabin-Regular.ttf
   entity/fonts/ComicSansMS.ttf
   entity/fonts/GoogleSans-Regular.ttf
@@ -1879,7 +1887,7 @@ set(EXPECTED_DATA
   wordlist.txt
 )
 
-set_glob(DATA GLOB_RECURSE "cfg;frag;json;map;otf;png;rules;ttc;ttf;txt;vert;wv" data ${EXPECTED_DATA})
+set_glob(DATA GLOB_RECURSE "cfg;chai;frag;json;map;otf;png;rules;ttc;ttf;txt;vert;wv" data ${EXPECTED_DATA})
 
 ########################################################################
 # COPY DATA AND SHARED LIBS
@@ -2175,9 +2183,17 @@ set_src(ENGINE_SHARED GLOB_RECURSE src/engine/shared
 )
 
 set_src(ENGINE_EXTERNAL GLOB src/engine/external
+  regex.cpp
+  regex.h
   spt.cpp
   spt.h
 )
+
+# ChaiScript
+file(GLOB_RECURSE ENGINE_EXTERNAL_CHAISCRIPT
+  "${PROJECT_SOURCE_DIR}/src/engine/external/chaiscript/*.hpp"
+)
+list(APPEND ENGINE_EXTERNAL ${ENGINE_EXTERNAL_CHAISCRIPT})
 
 set_src(ENGINE_GFX GLOB src/engine/gfx
   image.cpp
@@ -2407,8 +2423,6 @@ if(CLIENT)
     components/entity/freeze_kill.h 
     components/entity/info.cpp
     components/entity/info.h
-    components/entity/mapconfig.cpp
-    components/entity/mapconfig.h
     components/entity/menus_entity.cpp 
     components/entity/quick_actions.cpp
     components/entity/quick_actions.h
@@ -2492,6 +2506,10 @@ if(CLIENT)
     components/tclient/player_indicator.h
     components/tclient/rainbow.cpp
     components/tclient/rainbow.h
+    components/tclient/scripting.cpp
+    components/tclient/scripting.h
+    components/tclient/scripting/impl.cpp
+    components/tclient/scripting/impl.h
     components/tclient/skinprofiles.cpp
     components/tclient/skinprofiles.h
     components/tclient/statusbar.cpp
@@ -2741,8 +2759,17 @@ if(CLIENT)
   target_link_libraries(game-client ${LIBS_CLIENT})
 
   if(MSVC)
+    target_compile_options(game-client PRIVATE /bigobj) # TClient, required for ChaiScript
     target_link_options(game-client PRIVATE /ENTRY:mainCRTStartup)
   endif()
+
+  if(WIN32 AND NOT MSVC)
+    target_compile_options(game-client PRIVATE -Wa,-mbig-obj) # TClient, required for ChaiScript
+  endif()
+
+  # Silence warnings from ChaiScript
+  target_include_directories(game-client SYSTEM PRIVATE
+    ${PROJECT_SOURCE_DIR}/src/engine/external/chaiscript)
 
   target_include_directories(game-client SYSTEM PRIVATE
     ${FREETYPE_INCLUDE_DIRS}

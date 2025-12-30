@@ -93,9 +93,9 @@ MACRO_CONFIG_INT(ClAutoAddFlags, ec_warlist_auto_add_flags, 4, 0, 262144, CFGFLA
 // MACRO_CONFIG_INT(ClWarlistServerInfo, ec_warlist_server_info, 1, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Whether to show warlist info in the server info")
 
 // Run on Join
-MACRO_CONFIG_INT(ClRunOnJoinConsole, ec_run_on_join_console, 1, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Whether to use run on join")
-MACRO_CONFIG_INT(ClRunOnJoinDelay, ec_run_on_join_delay, 2, 7, 50000, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Tick Delay before using run on join")
-MACRO_CONFIG_STR(ClRunOnJoinMsg, ec_run_on_join_console_msg, 128, "", CFGFLAG_CLIENT | CFGFLAG_SAVE, "What it should run inside of the Console")
+MACRO_CONFIG_STR(ClExecuteOnConnect, ec_execute_on_connect, 100, "", CFGFLAG_CLIENT | CFGFLAG_SAVE, "Run a console command before connect")
+MACRO_CONFIG_STR(ClRunOnJoinConsole, ec_run_on_join_console, 128, "", CFGFLAG_CLIENT | CFGFLAG_SAVE, "What it should run inside of the Console")
+MACRO_CONFIG_INT(ClRunOnJoinConsoleDelay, ec_run_on_join_delay, 2, 7, 50000, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Tick Delay before using run on join")
 
 // Limit Mouse
 MACRO_CONFIG_INT(ClLimitMouseToScreen, ec_limit_mouse_to_screen, 0, 0, 2, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Limit mouse to screen boundaries")
@@ -251,6 +251,7 @@ MACRO_CONFIG_INT(ClAntiSpawnBlock, ec_anti_spawn_block, 0, 0, 1, CFGFLAG_CLIENT 
 
 // Freeze Kill
 MACRO_CONFIG_INT(ClFreezeKill, ec_freeze_kill, 0, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Kill if Frozen")
+MACRO_CONFIG_INT(ClFreezeKillBeforeStart, ec_freeze_kill_before_start, 0, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Whether the feature works before having started the race")
 //MACRO_CONFIG_INT(ClFreezeKillGrounded, ec_freeze_kill_grounded, 0, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Kill if Frozen")
 MACRO_CONFIG_INT(ClFreezeKillIgnoreKillProt, ec_freeze_kill_ignore_kill_prot, 0, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Ignore Kill protection when for auto freeze kill")
 MACRO_CONFIG_INT(ClFreezeKillOnlyFullFrozen, ec_freeze_kill_full_frozen, 1, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Only Starts Timer When Full Frozen")
@@ -329,8 +330,6 @@ MACRO_CONFIG_INT(EcUnreadNews, ec_unread_news, 0, 0, 1, CFGFLAG_CLIENT | CFGFLAG
 
 // Chat
 MACRO_CONFIG_INT(ClChatColorParsing, ec_chat_color_parsing, 1, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Allows you to use &00-&99 to chang the color of your text, &x marks the end of the color")
-
-MACRO_CONFIG_STR(ClPermaPassword, perma_password, 256, "", CFGFLAG_CLIENT | CFGFLAG_SAVE, "password")
 
 // Chat Bubbles
 MACRO_CONFIG_INT(ClChatBubbles, ec_chat_bubbles, 0, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Show Chatbubbles above players")

@@ -83,6 +83,7 @@ void CBindChat::AddBind(const char *pName, const char *pCommand)
 	str_copy(Bind.m_aName, pName);
 	str_copy(Bind.m_aCommand, pCommand);
 	m_vBinds.push_back(Bind);
+	CacheChatCommands();
 	SortChatBinds();
 }
 
@@ -96,6 +97,8 @@ void CBindChat::AddBindDefault(const char *pName, const char *pCommand)
 	str_copy(Bind.m_aName, pName);
 	str_copy(Bind.m_aCommand, pCommand);
 	m_vBinds.push_back(Bind);
+	CacheChatCommands();
+	SortChatBinds();
 }
 
 void CBindChat::RemoveBindCommand(const char *pCommand)
@@ -107,6 +110,8 @@ void CBindChat::RemoveBindCommand(const char *pCommand)
 		if(str_comp(It->m_aCommand, pCommand) == 0)
 		{
 			m_vBinds.erase(It);
+			CacheChatCommands();
+			SortChatBinds();
 			return;
 		}
 	}
@@ -124,6 +129,7 @@ void CBindChat::RemoveBind(const char *pName)
 			return;
 		}
 	}
+	CacheChatCommands();
 	SortChatBinds();
 }
 
@@ -133,11 +139,15 @@ void CBindChat::RemoveBind(int Index)
 		return;
 	auto It = m_vBinds.begin() + Index;
 	m_vBinds.erase(It);
+	CacheChatCommands();
+	SortChatBinds();
 }
 
 void CBindChat::RemoveAllBinds()
 {
 	m_vBinds.clear();
+	CacheChatCommands();
+	SortChatBinds();
 }
 
 int CBindChat::GetBindNoDefault(const char *pCommand)
@@ -241,6 +251,8 @@ void CBindChat::OnConsoleInit()
 	AddDefaultBind("clanteam", "war_clan_index 0 2");
 	AddDefaultBind("delclanteam", "remove_war_clan_index 2");
 	AddDefaultBind("unclanteam", "remove_war_clan_index 2");
+
+	AddDefaultBind("firetext", "chai entity/builtinscripts/firetext.chai");
 }
 
 void CBindChat::OnInit()
@@ -258,7 +270,7 @@ void CBindChat::ExecuteBind(int Bind, const char *pArgs)
 		str_append(aBuf, " ");
 		str_append(aBuf, pArgs);
 	}
-	Console()->ExecuteLine(aBuf);
+	Console()->ExecuteLine(aBuf, IConsole::CLIENT_ID_UNSPECIFIED);
 }
 
 bool CBindChat::CheckBindChat(const char *pText)
@@ -286,7 +298,8 @@ bool CBindChat::ChatDoBinds(const char *pText)
 	for(const CBind &Bind : m_vBinds)
 	{
 		const bool SendsMessage = str_find(Bind.m_aCommand, "say") ||
-			str_find(Bind.m_aCommand, "reply_last");
+			str_find(Bind.m_aCommand, "reply_last") ||
+			str_find(Bind.m_aCommand, "chai");
 		if(str_startswith_nocase(pText, Bind.m_aName) &&
 			str_comp_nocase_num(pText, Bind.m_aName, SpaceIndex) == 0)
 		{
