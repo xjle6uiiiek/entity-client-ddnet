@@ -806,8 +806,8 @@ void CMenus::RenderSettingsStatusbar(CUIRect MainView)
 	LeftView.HSplitTop(MarginSmall, nullptr, &LeftView);
 	static CButtonContainer s_StatusbarColor, s_StatusbarTextColor;
 
-	DoLine_ColorPicker(&s_StatusbarColor, ColorPickerLineSize, ColorPickerLabelSize, ColorPickerLineSpacing, &LeftView, Localize("Status bar color"), &g_Config.m_ClStatusBarColor, color_cast<ColorRGBA, ColorHSLA>(ColorHSLA(CConfig::ms_ClStatusBarColor)), false);
-	DoLine_ColorPicker(&s_StatusbarTextColor, ColorPickerLineSize, ColorPickerLabelSize, ColorPickerLineSpacing, &LeftView, Localize("Text color"), &g_Config.m_ClStatusBarTextColor, color_cast<ColorRGBA, ColorHSLA>(ColorHSLA(CConfig::ms_ClStatusBarTextColor)), false);
+	DoLine_ColorPicker(&s_StatusbarColor, ColorPickerLineSize, ColorPickerLabelSize, ColorPickerLineSpacing, &LeftView, Localize("Status bar color"), &g_Config.m_ClStatusBarColor, color_cast<ColorRGBA, ColorHSLA>(ColorHSLA(DefaultConfig::ClStatusBarColor)), false);
+	DoLine_ColorPicker(&s_StatusbarTextColor, ColorPickerLineSize, ColorPickerLabelSize, ColorPickerLineSpacing, &LeftView, Localize("Text color"), &g_Config.m_ClStatusBarTextColor, color_cast<ColorRGBA, ColorHSLA>(ColorHSLA(DefaultConfig::ClStatusBarTextColor)), false);
 	LeftView.HSplitTop(LineSize, &Button, &LeftView);
 	Ui()->DoScrollbarOption(&g_Config.m_ClStatusBarAlpha, &g_Config.m_ClStatusBarAlpha, &Button, Localize("Status bar alpha"), 0, 100);
 	LeftView.HSplitTop(LineSize, &Button, &LeftView);
@@ -2330,7 +2330,7 @@ void CMenus::RenderSettingsEClient(CUIRect MainView)
 
 						static CButtonContainer s_LastColor;
 						Automation.HSplitTop(-3.0f, &Button, &Automation);
-						DoLine_ColorPicker(&s_LastColor, ColorPickerLineSize, ColorPickerLabelSize, ColorPickerLineSpacing, &Automation, Localize(""), &g_Config.m_ClNotifyWhenLastColor, color_cast<ColorRGBA, ColorHSLA>(ColorHSLA(CConfig::ms_ClNotifyWhenLastColor)), true);
+						DoLine_ColorPicker(&s_LastColor, ColorPickerLineSize, ColorPickerLabelSize, ColorPickerLineSpacing, &Automation, Localize(""), &g_Config.m_ClNotifyWhenLastColor, color_cast<ColorRGBA, ColorHSLA>(ColorHSLA(DefaultConfig::ClNotifyWhenLastColor)), true);
 
 						Automation.HSplitTop(-25.0f, &Button, &Automation);
 						Offset += 20.0f;
@@ -2532,7 +2532,9 @@ void CMenus::RenderSettingsEClient(CUIRect MainView)
 			GoresMode.HSplitTop(HeaderHeight, &Button, &GoresMode);
 			Ui()->DoLabel(&Button, Localize("Gores Mode"), HeaderSize, HeaderAlignment);
 
-			DoButton_CheckBoxAutoVMarginAndSet(&g_Config.m_ClGoresMode, ("\"advanced\" Gores Mode"), &g_Config.m_ClGoresMode, &GoresMode, LineSize);
+			if(DoButton_CheckBoxAutoVMarginAndSet(&g_Config.m_ClGoresMode, ("\"advanced\" Gores Mode"), &g_Config.m_ClGoresMode, &GoresMode, LineSize))
+				GameClient()->m_EClient.ToggleGoresMode(g_Config.m_ClGoresMode);
+
 			DoButton_CheckBoxAutoVMarginAndSet(&g_Config.m_ClGoresModeDisableIfWeapons, ("Disable if You Have Any Weapon"), &g_Config.m_ClGoresModeDisableIfWeapons, &GoresMode, LineSize);
 			DoButton_CheckBoxAutoVMarginAndSet(&g_Config.m_ClAutoEnableGoresMode, ("Auto Enable if Gametype is \"Gores\""), &g_Config.m_ClAutoEnableGoresMode, &GoresMode, LineSize);
 
@@ -2824,7 +2826,7 @@ void CMenus::RenderSettingsVisual(CUIRect MainView)
 				static CButtonContainer s_EffectR;
 				Cosmetics.HSplitTop(-3.0f, &Label, &Cosmetics);
 				Cosmetics.HSplitTop(-17.0f, &Button, &Cosmetics);
-				DoLine_ColorPicker(&s_EffectR, ColorPickerLineSize, ColorPickerLabelSize, ColorPickerLineSpacing, &Cosmetics, Localize(""), &g_Config.m_ClEffectColor, color_cast<ColorRGBA, ColorHSLA>(ColorHSLA(CConfig::ms_ClEffectColor)), true);
+				DoLine_ColorPicker(&s_EffectR, ColorPickerLineSize, ColorPickerLabelSize, ColorPickerLineSpacing, &Cosmetics, Localize(""), &g_Config.m_ClEffectColor, color_cast<ColorRGBA, ColorHSLA>(ColorHSLA(DefaultConfig::ClEffectColor)), true);
 				Cosmetics.HSplitTop(-10.0f, &Button, &Cosmetics);
 			}
 
@@ -3213,9 +3215,9 @@ void CMenus::RenderSettingsVisual(CUIRect MainView)
 					if(!g_Config.m_ClWarListIndicatorColors || !g_Config.m_ClWarListIndicator)
 					{
 						static CButtonContainer s_IndicatorAliveColorId, s_IndicatorDeadColorId, s_IndicatorSavedColorId;
-						DoLine_ColorPicker(&s_IndicatorAliveColorId, ColorPickerLineSize, ColorPickerLabelSize, ColorPickerLineSpacing, &PlayerIndicator, Localize("Indicator alive color"), &g_Config.m_ClIndicatorAlive, color_cast<ColorRGBA, ColorHSLA>(ColorHSLA(CConfig::ms_ClIndicatorAlive)), false);
-						DoLine_ColorPicker(&s_IndicatorDeadColorId, ColorPickerLineSize, ColorPickerLabelSize, ColorPickerLineSpacing, &PlayerIndicator, Localize("Indicator in freeze color"), &g_Config.m_ClIndicatorFreeze, color_cast<ColorRGBA, ColorHSLA>(ColorHSLA(CConfig::ms_ClIndicatorFreeze)), false);
-						DoLine_ColorPicker(&s_IndicatorSavedColorId, ColorPickerLineSize, ColorPickerLabelSize, ColorPickerLineSpacing, &PlayerIndicator, Localize("Indicator safe color"), &g_Config.m_ClIndicatorSaved, color_cast<ColorRGBA, ColorHSLA>(ColorHSLA(CConfig::ms_ClIndicatorSaved)), false);
+						DoLine_ColorPicker(&s_IndicatorAliveColorId, ColorPickerLineSize, ColorPickerLabelSize, ColorPickerLineSpacing, &PlayerIndicator, Localize("Indicator alive color"), &g_Config.m_ClIndicatorAlive, color_cast<ColorRGBA, ColorHSLA>(ColorHSLA(DefaultConfig::ClIndicatorAlive)), false);
+						DoLine_ColorPicker(&s_IndicatorDeadColorId, ColorPickerLineSize, ColorPickerLabelSize, ColorPickerLineSpacing, &PlayerIndicator, Localize("Indicator in freeze color"), &g_Config.m_ClIndicatorFreeze, color_cast<ColorRGBA, ColorHSLA>(ColorHSLA(DefaultConfig::ClIndicatorFreeze)), false);
+						DoLine_ColorPicker(&s_IndicatorSavedColorId, ColorPickerLineSize, ColorPickerLabelSize, ColorPickerLineSpacing, &PlayerIndicator, Localize("Indicator safe color"), &g_Config.m_ClIndicatorSaved, color_cast<ColorRGBA, ColorHSLA>(ColorHSLA(DefaultConfig::ClIndicatorSaved)), false);
 						Offset += 60.0f;
 					}
 				}
@@ -3305,11 +3307,13 @@ void CMenus::RenderSettingsVisual(CUIRect MainView)
 				DoButton_CheckBoxAutoVMarginAndSet(&g_Config.m_TcFreezeKatana, Localize("Show katana on frozen players"), &g_Config.m_TcFreezeKatana, &Miscellaneous, LineSize);
 
 				Miscellaneous.HSplitTop(LineSize, &Button, &Miscellaneous);
-				Ui()->DoScrollbarOption(&g_Config.m_ClRenderCursorSpec, &g_Config.m_ClRenderCursorSpec, &Button, Localize("Cursor Opacity in Spec"), 0, 100, &CUi::ms_LinearScrollbarScale, 0u, "");
+				Ui()->DoScrollbarOption(&g_Config.m_ClCursorOpacitySpec, &g_Config.m_ClCursorOpacitySpec, &Button, Localize("Cursor Opacity in Spec"), 0, 100, &CUi::ms_LinearScrollbarScale, 0u, "");
 			}
 		}
 	}
 
+	
+#if defined(CONF_DISCORD)
 	/* Discord RPC */
 	{
 		DiscordRpc.HSplitTop(Margin, nullptr, &DiscordRpc);
@@ -3401,6 +3405,26 @@ void CMenus::RenderSettingsVisual(CUIRect MainView)
 			}
 		}
 	}
+	
+#else
+	/* Discord RPC */
+	{
+		DiscordRpc.HSplitTop(Margin, nullptr, &DiscordRpc);
+		DiscordRpc.HSplitTop(85.0f, &DiscordRpc, &ChatBubbles);
+		if(s_ScrollRegion.AddRect(DiscordRpc))
+		{
+			DiscordRpc.Draw(BackgroundColor, IGraphics::CORNER_ALL, CornerRoundness);
+			DiscordRpc.VMargin(Margin, &DiscordRpc);
+
+			DiscordRpc.HSplitTop(HeaderHeight, &Button, &DiscordRpc);
+			Ui()->DoLabel(&Button, Localize("Discord RPC"), HeaderSize, HeaderAlignment);
+			{
+				Ui()->DoLabel(&DiscordRpc, "You need to compile with -DDISCORD=ON to use discord rpc", FontSize, TEXTALIGN_ML);
+			}
+		}
+	}
+
+#endif
 
 	/* Chat Bubbles */
 	{
@@ -3468,7 +3492,7 @@ void CMenus::RenderSettingsVisual(CUIRect MainView)
 
 					DoButton_CheckBoxAutoVMarginAndSet(&g_Config.m_ClOutlineUnfreeze, Localize("Outline unfreezes & undeeps"), &g_Config.m_ClOutlineUnfreeze, &TileOutlines, LineSize);
 					TileOutlines.HSplitTop(-20.0f, &Button, &TileOutlines);
-					DoLine_ColorPicker(&s_OutlineColorUnfreezeId, ColorPickerLineSize, ColorPickerLabelSize, ColorPickerLineSpacing, &TileOutlines, Localize(""), &g_Config.m_ClOutlineColorUnfreeze, color_cast<ColorRGBA, ColorHSLA>(ColorHSLA(CConfig::ms_ClOutlineColorUnfreeze)), false, nullptr, true);
+					DoLine_ColorPicker(&s_OutlineColorUnfreezeId, ColorPickerLineSize, ColorPickerLabelSize, ColorPickerLineSpacing, &TileOutlines, Localize(""), &g_Config.m_ClOutlineColorUnfreeze, color_cast<ColorRGBA, ColorHSLA>(ColorHSLA(DefaultConfig::ClOutlineColorUnfreeze)), false, nullptr, true);
 					if(g_Config.m_ClOutlineUnfreeze)
 					{
 						Offset += 25.0f - ScrollBarOffset;
@@ -3480,7 +3504,7 @@ void CMenus::RenderSettingsVisual(CUIRect MainView)
 
 					DoButton_CheckBoxAutoVMarginAndSet(&g_Config.m_ClOutlineSolid, Localize("Outline solids"), &g_Config.m_ClOutlineSolid, &TileOutlines, LineSize);
 					TileOutlines.HSplitTop(-20.0f, &Button, &TileOutlines);
-					DoLine_ColorPicker(&s_OutlineColorSolidId, ColorPickerLineSize, ColorPickerLabelSize, ColorPickerLineSpacing, &TileOutlines, Localize(""), &g_Config.m_ClOutlineColorSolid, color_cast<ColorRGBA, ColorHSLA>(ColorHSLA(CConfig::ms_ClOutlineColorSolid)), false, nullptr, true);
+					DoLine_ColorPicker(&s_OutlineColorSolidId, ColorPickerLineSize, ColorPickerLabelSize, ColorPickerLineSpacing, &TileOutlines, Localize(""), &g_Config.m_ClOutlineColorSolid, color_cast<ColorRGBA, ColorHSLA>(ColorHSLA(DefaultConfig::ClOutlineColorSolid)), false, nullptr, true);
 					if(g_Config.m_ClOutlineSolid)
 					{
 						Offset += 25.0f - ScrollBarOffset;
@@ -3492,7 +3516,7 @@ void CMenus::RenderSettingsVisual(CUIRect MainView)
 
 					DoButton_CheckBoxAutoVMarginAndSet(&g_Config.m_ClOutlineTele, Localize("Outline teleporters"), &g_Config.m_ClOutlineTele, &TileOutlines, LineSize);
 					TileOutlines.HSplitTop(-20.0f, &Button, &TileOutlines);
-					DoLine_ColorPicker(&s_OutlineColorTeleId, ColorPickerLineSize, ColorPickerLabelSize, ColorPickerLineSpacing, &TileOutlines, Localize(""), &g_Config.m_ClOutlineColorTele, color_cast<ColorRGBA, ColorHSLA>(ColorHSLA(CConfig::ms_ClOutlineColorTele)), false, nullptr, true);
+					DoLine_ColorPicker(&s_OutlineColorTeleId, ColorPickerLineSize, ColorPickerLabelSize, ColorPickerLineSpacing, &TileOutlines, Localize(""), &g_Config.m_ClOutlineColorTele, color_cast<ColorRGBA, ColorHSLA>(ColorHSLA(DefaultConfig::ClOutlineColorTele)), false, nullptr, true);
 					if(g_Config.m_ClOutlineTele)
 					{
 						Offset += 25.0f - ScrollBarOffset;
@@ -3504,7 +3528,7 @@ void CMenus::RenderSettingsVisual(CUIRect MainView)
 
 					DoButton_CheckBoxAutoVMarginAndSet(&g_Config.m_ClOutlineKill, Localize("Outline kills"), &g_Config.m_ClOutlineKill, &TileOutlines, LineSize);
 					TileOutlines.HSplitTop(-20.0f, &Button, &TileOutlines);
-					DoLine_ColorPicker(&s_OutlineColorKillId, ColorPickerLineSize, ColorPickerLabelSize, ColorPickerLineSpacing, &TileOutlines, Localize(""), &g_Config.m_ClOutlineColorKill, color_cast<ColorRGBA, ColorHSLA>(ColorHSLA(CConfig::ms_ClOutlineColorKill)), false, nullptr, true);
+					DoLine_ColorPicker(&s_OutlineColorKillId, ColorPickerLineSize, ColorPickerLabelSize, ColorPickerLineSpacing, &TileOutlines, Localize(""), &g_Config.m_ClOutlineColorKill, color_cast<ColorRGBA, ColorHSLA>(ColorHSLA(DefaultConfig::ClOutlineColorKill)), false, nullptr, true);
 					if(g_Config.m_ClOutlineKill)
 					{
 						Offset += 25.0f - ScrollBarOffset;
@@ -3533,7 +3557,7 @@ void CMenus::RenderSettingsVisual(CUIRect MainView)
 			BgDraw.HSplitTop(MarginSmall, nullptr, &BgDraw);
 			
 			static CButtonContainer s_BgDrawColor;
-			DoLine_ColorPicker(&s_BgDrawColor, ColorPickerLineSize, ColorPickerLabelSize, ColorPickerLineSpacing, &BgDraw, Localize("Color"), &g_Config.m_TcBgDrawColor, color_cast<ColorRGBA, ColorHSLA>(ColorHSLA(CConfig::ms_TcBgDrawColor)), false);
+			DoLine_ColorPicker(&s_BgDrawColor, ColorPickerLineSize, ColorPickerLabelSize, ColorPickerLineSpacing, &BgDraw, Localize("Color"), &g_Config.m_TcBgDrawColor, color_cast<ColorRGBA, ColorHSLA>(ColorHSLA(DefaultConfig::TcBgDrawColor)), false);
 
 			BgDraw.HSplitTop(LineSize * 2.0f, &Button, &BgDraw);
 			if(g_Config.m_TcBgDrawFadeTime == 0)
