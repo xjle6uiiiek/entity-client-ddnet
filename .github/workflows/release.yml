@@ -17,17 +17,20 @@ on:
         description: 'Run ID of the build workflow to download artifacts from'
         required: true
 
+permissions:
+  contents: write
+
 jobs:
   release:
     runs-on: ubuntu-latest
 
     env:
       CLIENT_NAME: E-Client
-      TARGET_REPOSITORY: ${{ github.repository }} 
+      TARGET_REPOSITORY: ${{ github.repository }}
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Download Ubuntu artifact
         uses: actions/download-artifact@v4
@@ -90,6 +93,7 @@ jobs:
               echo "No artifact found in directory $dir. Skipping."
               continue
             fi
+
             filename=$(basename "$file")
             extension=""
             for ext in "${multi_ext[@]}"; do
@@ -101,6 +105,7 @@ jobs:
             if [ -z "$extension" ]; then
               extension="${filename##*.}"
             fi
+
             new_name="${CLIENT_NAME}-${os}.${extension}"
             echo "Renaming $file to $new_name"
             mv "$file" "./artifacts/$new_name"
@@ -112,43 +117,14 @@ jobs:
           echo "Listing ./artifacts directory:"
           ls -R ./artifacts
 
-      - name: Upload Ubuntu
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create GitHub Release and upload assets
+        uses: softprops/action-gh-release@v2
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./artifacts/${{ env.CLIENT_NAME }}-ubuntu.tar.xz
-          asset_name: ${{ env.CLIENT_NAME }}-ubuntu.tar.xz
-          asset_content_type: application/tar.xz
-          
-
-      - name: Upload Windows
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./artifacts/${{ env.CLIENT_NAME }}-windows.zip
-          asset_name: ${{ env.CLIENT_NAME }}-windows.zip
-          asset_content_type: application/zip
-
-      - name: Upload macOS
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./artifacts/${{ env.CLIENT_NAME }}-macOS.dmg
-          asset_name: ${{ env.CLIENT_NAME }}-macOS.dmg
-          asset_content_type: application/dmg
-
-      # - name: Upload Android
-      #   uses: actions/upload-release-asset@v1
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      #   with:
-      #     upload_url: ${{ steps.create_release.outputs.upload_url }}
-      #     asset_path: ./artifacts/${{ env.CLIENT_NAME }}-android.apk
-      #     asset_name: ${{ env.CLIENT_NAME }}-android.apk
-      #     asset_content_type: application/apk
+          tag_name: ${{ github.event.inputs.tag_name }}
+          name: ${{ github.event.inputs.release_name }}
+          body: ${{ github.event.inputs.body }}
+          files: |
+            ./artifacts/${{ env.CLIENT_NAME }}-ubuntu.tar.xz
+            ./artifacts/${{ env.CLIENT_NAME }}-windows.zip
+            ./artifacts/${{ env.CLIENT_NAME }}-macOS.dmg
+            # ./artifacts/${{ env.CLIENT_NAME }}-android.apk
