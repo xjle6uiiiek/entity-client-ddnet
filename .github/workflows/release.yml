@@ -56,14 +56,14 @@ jobs:
           repository: ${{ env.TARGET_REPOSITORY }}
           run-id: ${{ github.event.inputs.run_id }}
 
-      - name: Download Android artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ env.CLIENT_NAME }}-android
-          path: ./artifacts/android
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          repository: ${{ env.TARGET_REPOSITORY }}
-          run-id: ${{ github.event.inputs.run_id }}
+      # - name: Download Android artifact
+      #   uses: actions/download-artifact@v4
+      #   with:
+      #     name: ${{ env.CLIENT_NAME }}-android
+      #     path: ./artifacts/android
+      #     github-token: ${{ secrets.GITHUB_TOKEN }}
+      #     repository: ${{ env.TARGET_REPOSITORY }}
+      #     run-id: ${{ github.event.inputs.run_id }}
 
       - name: Create Release
         id: create_release
@@ -143,12 +143,12 @@ jobs:
           asset_name: ${{ env.CLIENT_NAME }}-macOS.dmg
           asset_content_type: application/dmg
 
-      - name: Upload Android
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./artifacts/${{ env.CLIENT_NAME }}-android.apk
-          asset_name: ${{ env.CLIENT_NAME }}-android.apk
-          asset_content_type: application/apk
+      # - name: Upload Android
+      #   uses: actions/upload-release-asset@v1
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #   with:
+      #     upload_url: ${{ steps.create_release.outputs.upload_url }}
+      #     asset_path: ./artifacts/${{ env.CLIENT_NAME }}-android.apk
+      #     asset_name: ${{ env.CLIENT_NAME }}-android.apk
+      #     asset_content_type: application/apk
