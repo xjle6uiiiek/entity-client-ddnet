@@ -1138,11 +1138,16 @@ void CMenus::RenderSettingsQuickActions(CUIRect MainView)
 
 	LeftView.HSplitTop(MarginSmall, nullptr, &LeftView);
 	LeftView.HSplitTop(LineSize, &Label, &LeftView);
-	Ui()->DoLabel(&Label, Localize("Use left mouse to select"), 14.0f, TEXTALIGN_ML);
+	Ui()->DoLabel(&Label, "Use left mouse to select", 14.0f, TEXTALIGN_ML);
 	LeftView.HSplitTop(LineSize, &Label, &LeftView);
-	Ui()->DoLabel(&Label, Localize("Use right mouse to swap with selected"), 14.0f, TEXTALIGN_ML);
+	Ui()->DoLabel(&Label, "Use right mouse to swap with selected", 14.0f, TEXTALIGN_ML);
 	LeftView.HSplitTop(LineSize, &Label, &LeftView);
-	Ui()->DoLabel(&Label, Localize("Use middle mouse select without copy"), 14.0f, TEXTALIGN_ML);
+	Ui()->DoLabel(&Label, "Use middle mouse select without copy", 14.0f, TEXTALIGN_ML);
+	LeftView.HSplitTop(LineSize, &Label, &LeftView);
+	LeftView.HSplitTop(LineSize, &Label, &LeftView);
+	Ui()->DoLabel(&Label, "To use the name of the target player do \"%s\"", 14.0f, TEXTALIGN_ML);
+	LeftView.HSplitTop(LineSize, &Label, &LeftView);
+	Ui()->DoLabel(&Label, "To get the Client Id do \"%d\"", 14.0f, TEXTALIGN_ML);
 
 	// RenderTee
 	{
@@ -1679,6 +1684,29 @@ void CMenus::RenderSettingsWarList(CUIRect MainView)
 
 		CUIRect TypeRect, DeleteButton, HideButton;
 		Item.m_Rect.Margin(0.0f, &TypeRect);
+
+		if(Ui()->ActiveItem() == &s_vTypeItemIds[i])
+		{
+			// If dragging up/down the list, swap war types
+			if(Ui()->MouseButton(0))
+			{
+				int SwapIndex = -1;
+				if(Ui()->MouseY() < Item.m_Rect.y)
+					SwapIndex = i - 1;
+				else if(Ui()->MouseY() > Item.m_Rect.y + Item.m_Rect.h)
+					SwapIndex = i + 1; 
+				if(SwapIndex >= 0 && SwapIndex < (int)GameClient()->m_WarList.m_WarTypes.size())
+				{
+					CWarType *pSwapType = GameClient()->m_WarList.m_WarTypes[SwapIndex];
+					CWarType *pThisType = GameClient()->m_WarList.m_WarTypes[i];
+					if(pSwapType->m_Removable && pThisType->m_Removable)
+					{
+						std::swap(GameClient()->m_WarList.m_WarTypes[i], GameClient()->m_WarList.m_WarTypes[SwapIndex]);
+						Ui()->SetActiveItem(&s_vTypeItemIds[SwapIndex]);
+					}
+				}
+			}
+		}
 
 		if(pType->m_Removable)
 		{
@@ -2716,8 +2744,8 @@ void CMenus::RenderSettingsEClient(CUIRect MainView)
 			Ui()->DoLabel(&Button, Localize("Anti Ping Smoothing"), HeaderSize, HeaderAlignment);
 			{
 				DoButton_CheckBoxAutoVMarginAndSet(&g_Config.m_TcAntiPingImproved, Localize("Use new smoothing algorithm"), &g_Config.m_TcAntiPingImproved, &AntiPingSmoothing, LineSize);
-				DoButton_CheckBoxAutoVMarginAndSet(&g_Config.m_TcAntiPingStableDirection, Localize("Optimistic prediction along stable direction"), &g_Config.m_TcAntiPingStableDirection, &AntiPingSmoothing, LineSize);
-				DoButton_CheckBoxAutoVMarginAndSet(&g_Config.m_TcAntiPingNegativeBuffer, Localize("Negative stability buffer (for Gores)"), &g_Config.m_TcAntiPingNegativeBuffer, &AntiPingSmoothing, LineSize);
+				DoButton_CheckBoxAutoVMarginAndSet(&g_Config.m_TcAntiPingStableDirection, Localize("Optimistic prediction in stable direction"), &g_Config.m_TcAntiPingStableDirection, &AntiPingSmoothing, LineSize);
+				DoButton_CheckBoxAutoVMarginAndSet(&g_Config.m_TcAntiPingNegativeBuffer, Localize("Remember instability for longer"), &g_Config.m_TcAntiPingNegativeBuffer, &AntiPingSmoothing, LineSize);
 				AntiPingSmoothing.HSplitTop(LineSize, &Button, &AntiPingSmoothing);
 				Ui()->DoScrollbarOption(&g_Config.m_TcAntiPingUncertaintyScale, &g_Config.m_TcAntiPingUncertaintyScale, &Button, Localize("Uncertainty duration"), 50, 400, &CUi::ms_LinearScrollbarScale, CUi::SCROLLBAR_OPTION_NOCLAMPVALUE, "%");
 			}
@@ -3340,28 +3368,24 @@ void CMenus::RenderSettingsVisual(CUIRect MainView)
 					DiscordRpcSet = true;
 				}
 				if(DiscordRPC != g_Config.m_ClDiscordRPC)
-				{
-					m_RPC_Ratelimit = time_get() + time_freq() * 1.5f;
 					DiscordRPC = g_Config.m_ClDiscordRPC;
-				}
 
 				if(g_Config.m_ClDiscordRPC)
 				{
 					if(DiscordRPCMap != g_Config.m_ClDiscordMapStatus)
 					{
-						// Ratelimit this so it doesn't get changed instantly every time you edit this
 						DiscordRPCMap = g_Config.m_ClDiscordMapStatus;
-						m_RPC_Ratelimit = time_get() + time_freq() * 1.5f;
+						Client()->DiscordRPCchange();
 					}
 					else if(str_comp(DiscordRPCOnlineMsg, g_Config.m_ClDiscordOnlineStatus) != 0)
 					{
 						str_copy(DiscordRPCOnlineMsg, g_Config.m_ClDiscordOnlineStatus);
-						m_RPC_Ratelimit = time_get() + time_freq() * 2.5f;
+						Client()->DiscordRPCchange();
 					}
 					else if(str_comp(DiscordRPCOfflineMsg, g_Config.m_ClDiscordOfflineStatus) != 0)
 					{
 						str_copy(DiscordRPCOfflineMsg, g_Config.m_ClDiscordOfflineStatus);
-						m_RPC_Ratelimit = time_get() + time_freq() * 2.5f;
+						Client()->DiscordRPCchange();
 					}
 				}
 

@@ -74,6 +74,7 @@
 #include "components/entity/entity.h"
 #include "components/entity/freeze_kill.h"
 #include "components/entity/info.h"
+#include "components/entity/map_overview.h"
 #include "components/entity/quick_actions.h"
 
 // Tater
@@ -82,6 +83,7 @@
 #include "components/tclient/bindchat.h"
 #include "components/tclient/bindwheel.h"
 #include "components/tclient/custom_communities.h"
+#include "components/tclient/mumble.h"
 #include "components/tclient/outlines.h"
 #include "components/tclient/player_indicator.h"
 #include "components/tclient/rainbow.h"
@@ -240,10 +242,11 @@ public:
 	// Entity
 	CEClient m_EClient;
 	CChatBubbles m_ChatBubbles;
-	CQuickActions m_QuickActions;
 	CAntiSpawnBlock m_AntiSpawnBlock;
 	CFreezeKill m_FreezeKill;
 	CEntityInfo m_EntityInfo;
+	CMapOverview m_MapOverview;
+	CQuickActions m_QuickActions;
 
 	// T-Client
 	CBindChat m_Bindchat;
@@ -251,6 +254,7 @@ public:
 	CBgDraw m_BgDraw;
 	CPlayerIndicator m_PlayerIndicator;
 	COutlines m_Outlines;
+	CMumble m_Mumble;
 	CRainbow m_Rainbow;
 	CSkinProfiles m_SkinProfiles;
 	CStatusBar m_StatusBar;
@@ -549,10 +553,10 @@ public:
 		// TClient
 		vec2 m_ImprovedPredPos = vec2(0, 0);
 		vec2 m_PrevImprovedPredPos = vec2(0, 0);
-		// vec2 m_DebugVector = vec2(0, 0);
-		// vec2 m_DebugVector2 = vec2(0, 0);
-		// vec2 m_DebugVector3 = vec2(0, 0);
+		bool m_ValidAntipingSmooth = false;
 		float m_Uncertainty = 0.0f;
+		float m_VolleyBallAngle = 0.0f;
+		bool m_IsVolleyBall = false;
 
 		std::shared_ptr<CManagedTeeRenderInfo> m_pSkinInfo = nullptr; // this is what the server reports
 		CTeeRenderInfo m_RenderInfo; // this is what we use
@@ -754,10 +758,11 @@ public:
 
 	int LastRaceTick() const;
 	int CurrentRaceTime() const;
+	bool StartedRace() const { return m_LastRaceTick != -1; }
 
 	bool IsTeamPlay() const { return m_Snap.m_pGameInfoObj && m_Snap.m_pGameInfoObj->m_GameFlags & GAMEFLAG_TEAMS; }
 
-	bool AntiPingPlayers() const { return g_Config.m_ClAntiPing && g_Config.m_ClAntiPingPlayers && !m_Snap.m_SpecInfo.m_Active && Client()->State() != IClient::STATE_DEMOPLAYBACK && (m_aTuning[g_Config.m_ClDummy].m_PlayerCollision || m_aTuning[g_Config.m_ClDummy].m_PlayerHooking); }
+	bool AntiPingPlayers() const { return g_Config.m_ClAntiPing && g_Config.m_ClAntiPingPlayers && !m_Snap.m_SpecInfo.m_Active && Client()->State() != IClient::STATE_DEMOPLAYBACK; }
 	bool AntiPingGrenade() const { return g_Config.m_ClAntiPing && g_Config.m_ClAntiPingGrenade && !m_Snap.m_SpecInfo.m_Active && Client()->State() != IClient::STATE_DEMOPLAYBACK; }
 	bool AntiPingWeapons() const { return g_Config.m_ClAntiPing && g_Config.m_ClAntiPingWeapons && !m_Snap.m_SpecInfo.m_Active && Client()->State() != IClient::STATE_DEMOPLAYBACK; }
 	bool AntiPingGunfire() const { return AntiPingGrenade() && AntiPingWeapons() && g_Config.m_ClAntiPingGunfire; }
@@ -970,6 +975,8 @@ public:
 	void ResetMultiView();
 	int FindFirstMultiViewId();
 	void CleanMultiViewId(int ClientId);
+	int m_MapBestTimeSeconds;
+	int m_MapBestTimeMillis;
 
 	bool m_CanReceivePoints;
 
@@ -1045,6 +1052,8 @@ public:
 	void SetConnectInfo(const NETADDR *pAddress) override;
 
 	// E-Client
+	void OnSelfDeath() override;
+
 	void OnServerBrowserUpdate() override;
 
 	void ClientMessage(const char *pString) override;
@@ -1055,7 +1064,7 @@ public:
 
 	// Get ClientId by Player Name
 	int GetClientId(const char *pName) override;
-	const char *GetClientName(int ClientId) override;
+	const char *GetClientName(int ClientId) override { return m_aClients[ClientId].m_aName; }
 };
 
 ColorRGBA CalculateNameColor(ColorHSLA TextColorHSL);

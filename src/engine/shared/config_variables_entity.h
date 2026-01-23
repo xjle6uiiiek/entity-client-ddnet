@@ -36,7 +36,7 @@ MACRO_CONFIG_INT(TcRenderGhostAsCircle, ec_render_ghost_as_circle, 0, 0, 1, CFGF
 // Outline Variables
 MACRO_CONFIG_INT(ClOutline, ec_outline, 0, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Draws outlines")
 MACRO_CONFIG_INT(ClOutlineEntities, ec_outline_in_entities, 0, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Only show outlines in entities")
-MACRO_CONFIG_INT(ClOutlineFreeze, ec_outline_freeze, 1, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Draws outline around freeze and deep")
+MACRO_CONFIG_INT(ClOutlineFreeze, ec_outline_freeze, 0, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Draws outline around freeze and deep")
 MACRO_CONFIG_INT(ClOutlineUnfreeze, ec_outline_unfreeze, 0, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Draws outline around unfreeze and undeep")
 MACRO_CONFIG_INT(ClOutlineSolid, ec_outline_solid, 0, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Draws outline around hook and unhook")
 MACRO_CONFIG_INT(ClOutlineTele, ec_outline_tele, 0, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Draws outline around teleporters")
@@ -340,7 +340,7 @@ MACRO_CONFIG_INT(ClChatBubbleShowTime, ec_chat_bubble_showtime, 200, 200, 1000, 
 MACRO_CONFIG_INT(ClChatBubbleFadeOut, ec_chat_bubble_fadeout, 35, 15, 100, CFGFLAG_CLIENT | CFGFLAG_SAVE, "How long it fades out")
 MACRO_CONFIG_INT(ClChatBubbleFadeIn, ec_chat_bubble_fadein, 15, 15, 100, CFGFLAG_CLIENT | CFGFLAG_SAVE, "how long it fades in")
 
-// MACRO_CONFIG_INT(ClChatBubblePushOut, ec_chat_bubble_push_out, 0, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Experimental setting to push bubbles away from eachother")
+// MACRO_CONFIG_INT(ClChatBubblePushOut, ec_chat_bubble_push_out, 0, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Makes sure chatbubbles dont overlap")
 
 // Quick Actions
 MACRO_CONFIG_INT(ClResetQuickActionMouse, ec_reset_quickaction_mouse, 0, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Reset position of mouse when opening the quickactions menu")
@@ -370,7 +370,23 @@ MACRO_CONFIG_INT(TcBgDrawWidth, ec_bg_draw_width, 5, 1, 50, CFGFLAG_CLIENT | CFG
 MACRO_CONFIG_INT(TcBgDrawFadeTime, ec_bg_draw_fade_time, 0, 0, 600, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Time until strokes disappear (0 = never)")
 MACRO_CONFIG_INT(TcBgDrawMaxItems, ec_bg_draw_max_items, 128, 0, 2048, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Maximum number of strokes")
 MACRO_CONFIG_COL(TcBgDrawColor, ec_bg_draw_color, 11893936, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Color of background draw strokes")
-MACRO_CONFIG_INT(TcBgDrawAutoSaveLoad, ec_bg_draw_auto_save_load, 1, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Automatically save and load background drawings")
+MACRO_CONFIG_INT(TcBgDrawAutoSaveLoad, ec_bg_draw_auto_save_load, 0, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Automatically save and load background drawings")
+
+// Timer
+MACRO_CONFIG_INT(TcShowLocalTimeSeconds, tc_show_local_time_seconds, 0, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Show local time in seconds")
+
+// Weapon in Freeze
+MACRO_CONFIG_INT(ClRenderWeaponsInFreeze, ec_render_weapons_in_freeze, 0, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Renders players' weapons while frozen")
+
+// Map Overview
+MACRO_CONFIG_INT(ClMapOverview, ec_map_overview, 0, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Enable map overview")
+MACRO_CONFIG_INT(ClMapOverviewSpectatingOnly, ec_map_overview_spectating_only, 1, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Enable map overview only when spectating")
+MACRO_CONFIG_INT(ClMapOverviewOpacity, ec_map_overview_opacity, 15, 0, 100, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Opacity of the map overview")
+
+// Volleyball
+MACRO_CONFIG_INT(EcVolleyBallBetterBall, ec_volleyball_better_ball, 1, 0, 2, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Make frozen players in volleyball look more like volleyballs (0 = disabled, 1 = in volleyball maps, 2 = always)")
+MACRO_CONFIG_STR(EcVolleyBallBetterBallSkin, ec_volleyball_better_ball_skin, 24, "beachball", CFGFLAG_CLIENT | CFGFLAG_SAVE | CFGFLAG_INSENSITIVE, "Player skin to use for better volleyball ball")
+MACRO_CONFIG_INT(EcVolleyBallSpinSpeed, ec_volleyball_spin_speed, 50, 0, 100, CFGFLAG_CLIENT | CFGFLAG_SAVE, "How fast the volleyball spins")
 
 // Warlist Server Browser
 MACRO_CONFIG_INT(ClWarlistServerBrowser, ec_warlist_server_browser, 1, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Enable Warlist Server Browser, works like the friends tab")

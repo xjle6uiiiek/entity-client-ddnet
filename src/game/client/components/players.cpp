@@ -24,6 +24,7 @@
 #include <game/client/gameclient.h>
 #include <game/gamecore.h>
 #include <game/mapitems.h>
+#include <base/log.h>
 
 static float CalculateHandAngle(vec2 Dir, float AngleOffset)
 {
@@ -162,6 +163,10 @@ void CPlayers::RenderHookCollLine(
 	const CNetObj_Character *pPlayerChar,
 	int ClientId)
 {
+	// TClient
+	if(ClientId >= 0 && GameClient()->m_aClients[ClientId].m_IsVolleyBall)
+		return;
+
 	CNetObj_Character Prev;
 	CNetObj_Character Player;
 	Prev = *pPrevChar;
@@ -270,9 +275,21 @@ void CPlayers::RenderHookCollLine(
 			if(!HookEnteredTelehook)
 			{
 				vec2 RetractingHookEndPos = BasePos + normalize(SegmentEndPos - BasePos) * HookLength;
-				if(GameClient()->IntersectCharacter(SegmentStartPos, RetractingHookEndPos, HitPos, ClientId, &IntersectedPlayerPosition) != -1)
+
+				// you can't hook a player, if the hook is behind solids, however you miss the solids as well
+				int Hit = Collision()->IntersectLineTeleHook(SegmentStartPos, RetractingHookEndPos, &HitPos, nullptr, &Tele);
+
+				if(GameClient()->IntersectCharacter(SegmentStartPos, HitPos, RetractingHookEndPos, ClientId, &IntersectedPlayerPosition) != -1)
 				{
-					AddHookPlayerSegment(LineStartPos, SegmentEndPos, IntersectedPlayerPosition, HitPos);
+					AddHookPlayerSegment(LineStartPos, SegmentEndPos, IntersectedPlayerPosition, RetractingHookEndPos);
+					break;
+				}
+
+				// Retracting hooks don't go through hook teleporters
+				if(Hit && Hit != TILE_TELEINHOOK)
+				{
+					// The hook misses the player, but also misses the solid
+					vLineSegments.emplace_back(LineStartPos, SegmentStartPos);
 					break;
 				}
 			}
@@ -577,6 +594,44 @@ void CPlayers::RenderPlayer(
 
 	GameClient()->m_Flow.Add(Position, Vel * 100.0f, 10.0f);
 
+	// TClient
+	if(ClientId >= 0 && GameClient()->m_aClients[ClientId].m_IsVolleyBall)
+	{
+		// Update
+		const float Delta = Client()->IntraGameTickSincePrev(g_Config.m_ClDummy);
+		auto &ClientData = GameClient()->m_aClients[ClientId];
+
+		vec2 TempVel = Vel;
+		TempVel.x *= 0.65f;
+		TempVel.y *= 0.25f;
+
+		ClientData.m_VolleyBallAngle += length(TempVel * Delta * g_Config.m_EcVolleyBallSpinSpeed * 0.00001);
+		if(ClientData.m_VolleyBallAngle < 0.0f)
+			ClientData.m_VolleyBallAngle += 2.0f * pi;
+		else if(ClientData.m_VolleyBallAngle > 2.0f * pi)
+			ClientData.m_VolleyBallAngle -= 2.0f * pi;
+		// Render
+		const CSkin *pSkin = GameClient()->m_Skins.Find(g_Config.m_EcVolleyBallBetterBallSkin);
+		if(!pSkin)
+			return;
+		const float Size = pRenderInfo->m_Size * 1.2f;
+		Graphics()->TextureSet(pSkin->m_OriginalSkin.m_BodyOutline);
+		Graphics()->QuadsBegin();
+		Graphics()->SetColor(ColorRGBA(1.0f, 1.0f, 1.0f, Alpha));
+		IEngineGraphics::CQuadItem QuadOutline{Position.x, Position.y, Size, Size};
+		Graphics()->QuadsSetRotation(ClientData.m_VolleyBallAngle);
+		Graphics()->QuadsDraw(&QuadOutline, 1);
+		Graphics()->QuadsEnd();
+		Graphics()->TextureSet(pSkin->m_OriginalSkin.m_Body);
+		Graphics()->QuadsBegin();
+		Graphics()->SetColor(ColorRGBA(1.0f, 1.0f, 1.0f, Alpha));
+		Graphics()->QuadsSetRotation(ClientData.m_VolleyBallAngle);
+		IEngineGraphics::CQuadItem Quad{Position.x, Position.y, Size, Size};
+		Graphics()->QuadsDraw(&Quad, 1);
+		Graphics()->QuadsEnd();
+		return;
+	}
+
 	RenderInfo.m_GotAirJump = Player.m_Jumped & 2 ? false : true;
 
 	RenderInfo.m_FeetFlipped = false;
@@ -634,7 +689,14 @@ void CPlayers::RenderPlayer(
 	// draw gun
 	if(Player.m_Weapon >= 0)
 	{
-		if(!(RenderInfo.m_TeeRenderFlags & TEE_NO_WEAPON))
+		bool FlagNoWeapon = RenderInfo.m_TeeRenderFlags & TEE_NO_WEAPON;
+		bool RenderWeapon = !FlagNoWeapon || g_Config.m_ClRenderWeaponsInFreeze;
+
+		float OriginalAlpha = Alpha;
+		if(RenderWeapon && FlagNoWeapon)
+			Alpha *= 0.2f;
+
+		if(RenderWeapon)
 		{
 			Graphics()->SetColor(1.0f, 1.0f, 1.0f, Alpha);
 
@@ -814,6 +876,8 @@ void CPlayers::RenderPlayer(
 			case WEAPON_GRENADE: RenderHand(&RenderInfo, WeaponPosition, Direction, -pi / 2.0f, vec2(-4.0f, 7.0f), Alpha); break;
 			}
 		}
+
+		Alpha = OriginalAlpha;
 	}
 
 	// render the "shadow" tee

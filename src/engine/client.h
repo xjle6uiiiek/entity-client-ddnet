@@ -178,7 +178,7 @@ public:
 #if defined(CONF_VIDEORECORDER)
 	virtual const char *DemoPlayer_Render(const char *pFilename, int StorageType, const char *pVideoName, int SpeedIndex, bool StartPaused = false) = 0;
 #endif
-	virtual void DemoRecorder_Start(const char *pFilename, bool WithTimestamp, int Recorder, bool Verbose = false) = 0;
+	virtual void DemoRecorder_Start(const char *pFilename, bool WithTimestamp, int Recorder) = 0;
 	virtual void DemoRecorder_HandleAutoStart() = 0;
 	virtual void DemoRecorder_UpdateReplayRecorder() = 0;
 	virtual class IDemoRecorder *DemoRecorder(int Recorder) = 0;
@@ -413,6 +413,8 @@ public:
 	// E-Client
 	virtual bool CheckNewInput() = 0;
 	virtual void SetConnectInfo(const NETADDR *pAddress) = 0;
+
+	virtual void OnSelfDeath() = 0;
 
 	virtual void OnServerBrowserUpdate() = 0;
 	virtual void ClientMessage(const char *pString) = 0;

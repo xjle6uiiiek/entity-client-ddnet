@@ -78,7 +78,6 @@ void CHud::OnReset()
 	m_FinishTimeLastReceivedTick = 0;
 	m_TimeCpLastReceivedTick = 0;
 	m_ShowFinishTime = false;
-	m_ServerRecord = -1.0f;
 	m_aPlayerRecord[0] = -1.0f;
 	m_aPlayerRecord[1] = -1.0f;
 	m_aPlayerSpeed[0] = 0;
@@ -1605,13 +1604,17 @@ void CHud::RenderLocalTime(float x)
 	if(!g_Config.m_ClShowLocalTimeAlways && !GameClient()->m_Scoreboard.IsActive())
 		return;
 
-	// draw the box
-	Graphics()->DrawRect(x - 30.0f, 0.0f, 25.0f, 12.5f, ColorRGBA(0.0f, 0.0f, 0.0f, 0.4f), IGraphics::CORNER_B, 3.75f);
+	const bool Seconds = g_Config.m_TcShowLocalTimeSeconds; // TClient
 
-	// draw the text
-	char aTimeStr[6];
-	str_timestamp_format(aTimeStr, sizeof(aTimeStr), "%H:%M");
-	TextRender()->Text(x - 25.0f, (12.5f - 5.f) / 2.f, 5.0f, aTimeStr, -1.0f);
+	char aTimeStr[16];
+	str_timestamp_format(aTimeStr, sizeof(aTimeStr), Seconds ? "%H:%M.%S" : "%H:%M");
+	const float Width = std::round(TextRender()->TextBoundingBox(5.0f, aTimeStr).m_W);
+
+	Graphics()->DrawRect(x - (Width + 15.0f), 0.0f, Width + 10.0f, 12.5f, ColorRGBA(0.0f, 0.0f, 0.0f, 0.4f), IGraphics::CORNER_B, 3.75f);
+	TextRender()->Text(x - (Width + 10.0f), (12.5f - 5.f) / 2.f, 5.0f, aTimeStr, -1.0f);
+
+	// Graphics()->DrawRect(x - 30.0f, 0.0f, 25.0f, 12.5f, ColorRGBA(0.0f, 0.0f, 0.0f, 0.4f), IGraphics::CORNER_B, 3.75f);
+	// TextRender()->Text(x - 25.0f, (12.5f - 5.f) / 2.f, 5.0f, aTimeStr, -1.0f);
 }
 
 void CHud::OnNewSnapshot()
@@ -1772,7 +1775,7 @@ void CHud::OnMessage(int MsgType, void *pRawMsg)
 		}
 		else if(MsgType == NETMSGTYPE_SV_RECORD || GameClient()->m_GameInfo.m_RaceRecordMessage)
 		{
-			m_ServerRecord = (float)pMsg->m_ServerTimeBest / 100;
+			// ignore m_ServerTimeBest, it's handled by the game client
 			m_aPlayerRecord[g_Config.m_ClDummy] = (float)pMsg->m_PlayerTimeBest / 100;
 		}
 	}
@@ -1875,25 +1878,44 @@ void CHud::RenderDDRaceEffects()
 
 void CHud::RenderRecord()
 {
-	if(m_ServerRecord > 0.0f)
+	if(GameClient()->m_MapBestTimeSeconds != FinishTime::UNSET && GameClient()->m_MapBestTimeSeconds != FinishTime::NOT_FINISHED_MILLIS)
 	{
 		char aBuf[64];
 		TextRender()->Text(5, 75, 6, Localize("Server best:"), -1.0f);
 		char aTime[32];
-		str_time_float(m_ServerRecord, TIME_HOURS_CENTISECS, aTime, sizeof(aTime));
-		str_format(aBuf, sizeof(aBuf), "%s%s", m_ServerRecord > 3600 ? "" : "   ", aTime);
+		int64_t TimeCentiseconds = static_cast<int64_t>(GameClient()->m_MapBestTimeSeconds) * 100 + static_cast<int64_t>(GameClient()->m_MapBestTimeMillis) / 10;
+		str_time(TimeCentiseconds, TIME_HOURS_CENTISECS, aTime, sizeof(aTime));
+		str_format(aBuf, sizeof(aBuf), "%s%s", GameClient()->m_MapBestTimeSeconds > 3600 ? "" : "   ", aTime);
 		TextRender()->Text(53, 75, 6, aBuf, -1.0f);
 	}
 
-	const float PlayerRecord = m_aPlayerRecord[g_Config.m_ClDummy];
-	if(PlayerRecord > 0.0f)
+	if(GameClient()->m_ReceivedDDNetPlayerFinishTimes)
 	{
-		char aBuf[64];
-		TextRender()->Text(5, 82, 6, Localize("Personal best:"), -1.0f);
-		char aTime[32];
-		str_time_float(PlayerRecord, TIME_HOURS_CENTISECS, aTime, sizeof(aTime));
-		str_format(aBuf, sizeof(aBuf), "%s%s", PlayerRecord > 3600 ? "" : "   ", aTime);
-		TextRender()->Text(53, 82, 6, aBuf, -1.0f);
+		const int PlayerTimeSeconds = GameClient()->m_aClients[GameClient()->m_aLocalIds[g_Config.m_ClDummy]].m_FinishTimeSeconds;
+		if(PlayerTimeSeconds != FinishTime::NOT_FINISHED_MILLIS)
+		{
+			char aBuf[64];
+			TextRender()->Text(5, 82, 6, Localize("Personal best:"), -1.0f);
+			char aTime[32];
+			const int PlayerTimeMillis = GameClient()->m_aClients[GameClient()->m_aLocalIds[g_Config.m_ClDummy]].m_FinishTimeMillis;
+			int64_t TimeCentiseconds = static_cast<int64_t>(PlayerTimeSeconds) * 100 + static_cast<int64_t>(PlayerTimeMillis) / 10;
+			str_time(TimeCentiseconds, TIME_HOURS_CENTISECS, aTime, sizeof(aTime));
+			str_format(aBuf, sizeof(aBuf), "%s%s", PlayerTimeSeconds > 3600 ? "" : "   ", aTime);
+			TextRender()->Text(53, 82, 6, aBuf, -1.0f);
+		}
+	}
+	else
+	{
+		const float PlayerRecord = m_aPlayerRecord[g_Config.m_ClDummy];
+		if(PlayerRecord > 0.0f)
+		{
+			char aBuf[64];
+			TextRender()->Text(5, 82, 6, Localize("Personal best:"), -1.0f);
+			char aTime[32];
+			str_time_float(PlayerRecord, TIME_HOURS_CENTISECS, aTime, sizeof(aTime));
+			str_format(aBuf, sizeof(aBuf), "%s%s", PlayerRecord > 3600 ? "" : "   ", aTime);
+			TextRender()->Text(53, 82, 6, aBuf, -1.0f);
+		}
 	}
 }
 

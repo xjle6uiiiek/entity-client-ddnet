@@ -393,6 +393,22 @@ void CEClient::NotifyOnMove()
 	m_LastPos = LocalPos;
 }
 
+void CEClient::UpdateVolleyball()
+{
+	bool IsVolleyBall = false;
+	if(g_Config.m_EcVolleyBallBetterBall > 0 && g_Config.m_EcVolleyBallBetterBallSkin[0] != '\0')
+	{
+		if(g_Config.m_EcVolleyBallBetterBall > 1)
+			IsVolleyBall = true;
+		else
+			IsVolleyBall = str_startswith_nocase(Client()->GetCurrentMap(), "volleyball");
+	};
+	for(auto &Client : GameClient()->m_aClients)
+	{
+		Client.m_IsVolleyBall = IsVolleyBall && Client.m_DeepFrozen;
+	}
+}
+
 void CEClient::UpdateRainbow()
 {
 	static bool m_RainbowWasOn = false;
@@ -499,13 +515,13 @@ void CEClient::OnInit()
 void CEClient::OnNewSnapshot()
 {
 	NotifyOnMove();
+	UpdateVolleyball();
 }
 
 void CEClient::OnStateChange(int NewState, int OldState)
 {
 	if(NewState != OldState)
 	{
-		m_SentKill = false;
 		m_JoinedTeam = false;
 		m_AttemptedJoinTeam = false;
 		m_LastReplyId = -1;
@@ -517,27 +533,19 @@ void CEClient::OnRender()
 {
 	UpdateRainbow();
 
-	if(GameClient()->m_Menus.m_RPC_Ratelimit < time_get() && (GameClient()->m_Menus.m_RPC_Ratelimit - time_get()) / time_freq() > -1)
-	{
-		Client()->DiscordRPCchange();
-		GameClient()->m_Menus.m_RPC_Ratelimit = -2;
-	}
-
 	if(Client()->State() == CClient::STATE_DEMOPLAYBACK)
 		return;
 
 	UpdateRainbow();
 	GoresMode();
 
-	if(m_SentKill)
-	{
-		GameClient()->m_AntiSpawnBlock.m_SentKill = true;
-		m_KillCount++;
-		m_SentKill = false;
-	}
-
 	if(GameClient()->m_Controls.m_aInputData[g_Config.m_ClDummy].m_Jump || (GameClient()->m_Controls.m_aInputDirectionLeft[g_Config.m_ClDummy] || GameClient()->m_Controls.m_aInputDirectionRight[g_Config.m_ClDummy]))
 	{
 		m_LastMovement = time_get();
 	}
+}
+
+void CEClient::OnSelfDeath()
+{
+	m_KillCount++;
 }
