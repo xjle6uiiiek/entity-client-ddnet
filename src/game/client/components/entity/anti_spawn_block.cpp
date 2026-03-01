@@ -14,10 +14,13 @@
 
 void CAntiSpawnBlock::Reset(int State)
 {
-	if(State != -1 && m_State == State && GameClient()->m_Teams.Team(GameClient()->m_Snap.m_LocalClientId) != 0)
+	if(m_State == State)
+		return;
+
+	if(GameClient()->m_Teams.Team(GameClient()->m_Snap.m_LocalClientId) != TEAM_FLOCK)
 		GameClient()->m_Chat.SendChat(0, "/team 0");
 
-	m_State = STATE_NONE;
+	m_State = State;
 }
 
 void CAntiSpawnBlock::OnRender()
@@ -26,17 +29,17 @@ void CAntiSpawnBlock::OnRender()
 
 	if(!g_Config.m_ClAntiSpawnBlock)
 	{
-		Reset(STATE_IN_TEAM);
+		if(m_State != STATE_NONE)
+			Reset(STATE_NONE);
 		return;
 	}
 
+	if(GameClient()->m_Snap.m_SpecInfo.m_Active)
+		return;
+
 	// if Can't find Player or Player STARTED the race, stop
 	if(!GameClient()->m_Snap.m_pLocalCharacter || GameClient()->CurrentRaceTime())
-	{
-		if(m_State != STATE_NONE)
-			Reset();
 		return;
-	}
 
 	vec2 Pos = GameClient()->m_PredictedChar.m_Pos;
 
@@ -62,4 +65,10 @@ void CAntiSpawnBlock::OnRender()
 			m_Delay = time_get() + time_freq() * 2.5f;
 		}
 	}
+}
+
+void CAntiSpawnBlock::OnStateChange(int NewState, int OldState)
+{
+	if(NewState != OldState)
+		Reset(STATE_NONE);
 }

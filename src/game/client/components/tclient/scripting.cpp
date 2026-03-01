@@ -85,7 +85,7 @@ private:
 		if(Str == "map")
 		{
 			if(Client()->State() == IClient::STATE_ONLINE || Client()->State() == IClient::STATE_DEMOPLAYBACK)
-				return Client()->GetCurrentMap();
+				return GameClient()->Map()->BaseName();
 			else if(GameClient()->m_ConnectServerInfo)
 				return GameClient()->m_ConnectServerInfo->m_aMap;
 			else
@@ -258,6 +258,14 @@ private:
 			const bool Passworded = (pServerInfo->m_Flags & SERVER_FLAG_PASSWORD) != 0;
 			return Passworded;
 		}
+		else if(Str == "player_name")
+		{
+			return g_Config.m_PlayerName;
+		}
+		else if(Str == "dummy_name")
+		{
+			return g_Config.m_ClDummyName;
+		}
 		// E-Client>
 
 		throw std::string("No state with name '") + Str + std::string("'");
@@ -362,7 +370,6 @@ private:
 	}
 	// E-Client>
 
-	
 	CScriptingCtx::Any ToLower(const std::string &Str)
 	{
 		std::string LowerStr = Str;

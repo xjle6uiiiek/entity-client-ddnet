@@ -67,6 +67,7 @@
 #include "components/tooltips.h"
 #include "components/touch_controls.h"
 #include "components/voting.h"
+#include <memory>
 
 // Entity
 #include "components/entity/anti_spawn_block.h"
@@ -75,6 +76,7 @@
 #include "components/entity/freeze_kill.h"
 #include "components/entity/info.h"
 #include "components/entity/map_overview.h"
+#include "components/entity/physicball.h"
 #include "components/entity/quick_actions.h"
 
 // Tater
@@ -125,6 +127,8 @@
 #include <optional>
 #include <vector>
 
+class IMap;
+
 class CGameInfo
 {
 public:
@@ -171,6 +175,8 @@ public:
 	bool m_NoSkinChangeForFrozen;
 
 	bool m_DDRaceTeam;
+
+	bool m_PredictEvents;
 };
 
 class CSnapEntities
@@ -247,6 +253,7 @@ public:
 	CFreezeKill m_FreezeKill;
 	CEntityInfo m_EntityInfo;
 	CMapOverview m_MapOverview;
+	CPhysicBalls m_PhysicBalls;
 	CQuickActions m_QuickActions;
 
 	// T-Client
@@ -553,6 +560,7 @@ public:
 		CCharacterCore m_PrevPredicted;
 
 		// TClient
+		CCharacterCore m_RegularPredicted;
 		vec2 m_ImprovedPredPos = vec2(0, 0);
 		vec2 m_PrevImprovedPredPos = vec2(0, 0);
 		bool m_ValidAntipingSmooth = false;
@@ -753,6 +761,7 @@ public:
 	unsigned int m_DummyFire;
 	bool m_ReceivedDDNetPlayer;
 	bool m_ReceivedDDNetPlayerFinishTimes;
+	bool m_ReceivedDDNetPlayerFinishTimesMillis;
 
 	class CTeamsCore m_Teams;
 
@@ -791,6 +800,8 @@ public:
 	bool IsLocalCharSuper() const;
 	bool CanDisplayWarning() const override;
 
+	IMap *Map() override { return m_pMap.get(); }
+	const IMap *Map() const override { return m_pMap.get(); }
 	CNetObjHandler *GetNetObjHandler() override;
 	protocol7::CNetObjHandler *GetNetObjHandler7() override;
 
@@ -965,8 +976,10 @@ public:
 
 	const std::vector<CSnapEntities> &SnapEntities() { return m_vSnapEntities; }
 
+	// TClient
 	vec2 GetSmoothPos(int ClientId);
 	vec2 GetFreezePos(int ClientId);
+	vec2 GetFastInputPos(int ClientId);
 
 	int m_MultiViewTeam;
 	float m_MultiViewPersonalZoom;
@@ -979,10 +992,13 @@ public:
 	void CleanMultiViewId(int ClientId);
 	int m_MapBestTimeSeconds;
 	int m_MapBestTimeMillis;
+	char m_aMapDescription[512];
 
 	bool m_CanReceivePoints;
 
 private:
+	std::unique_ptr<IMap> m_pMap;
+
 	std::vector<CSnapEntities> m_vSnapEntities;
 	void SnapCollectEntities();
 
@@ -997,6 +1013,7 @@ private:
 	void UpdatePrediction();
 	void UpdateSpectatorCursor();
 	void UpdateRenderedCharacters();
+	void HandlePredictedEvents(int Tick);
 
 	int m_aLastUpdateTick[MAX_CLIENTS] = {0};
 	void DetectStrongHook();
@@ -1047,16 +1064,17 @@ private:
 
 public:
 	// TClient
-	int m_SmoothTick[2] = {};
-	float m_SmoothIntraTick[2] = {};
+	int m_SmoothTick = 0;
+	float m_SmoothIntraTick = 0;
 	bool CheckNewInput() override;
 	std::optional<CServerInfo> m_ConnectServerInfo = std::nullopt;
 	void SetConnectInfo(const NETADDR *pAddress) override;
 
+
 	// E-Client
 	void OnSelfDeath() override;
 
-	void OnServerBrowserUpdate() override;
+	void OnServerBrowserRefresh() override;
 
 	void ClientMessage(const char *pString) override;
 	void OnJoinInfo() override;
@@ -1067,6 +1085,7 @@ public:
 	// Get ClientId by Player Name
 	int GetClientId(const char *pName) override;
 	const char *GetClientName(int ClientId) override { return m_aClients[ClientId].m_aName; }
+	vec2 GetCursorWorldPos() const;
 };
 
 ColorRGBA CalculateNameColor(ColorHSLA TextColorHSL);

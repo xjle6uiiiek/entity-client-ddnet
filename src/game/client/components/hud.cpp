@@ -2,13 +2,13 @@
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
 #include "hud.h"
 
-#include "binds.h"
 #include "camera.h"
 #include "controls.h"
 #include "voting.h"
 
 #include <base/color.h>
 
+#include <engine/font_icons.h>
 #include <engine/graphics.h>
 #include <engine/shared/config.h>
 #include <engine/textrender.h>
@@ -20,10 +20,26 @@
 #include <game/client/components/scoreboard.h>
 #include <game/client/gameclient.h>
 #include <game/client/prediction/entities/character.h>
-#include <game/layers.h>
 #include <game/localization.h>
 
 #include <cmath>
+#include <algorithm>
+#include <cstdint>
+#include <vector>
+#include <generated/data_types.h>
+#include <generated/protocol7.h>
+#include <base/math.h>
+#include <base/str.h>
+#include <base/system.h>
+#include <base/time.h>
+#include <base/vmath.h>
+#include <engine/client.h>
+#include <engine/shared/protocol.h>
+#include <engine/shared/video.h>
+#include "tclient/warlist.h"
+#include <game/client/render.h>
+#include <game/client/skin.h>
+#include <game/gamecore.h>
 
 CHud::CHud()
 {
@@ -345,8 +361,18 @@ void CHud::RenderScoreHud()
 						str_time((int64_t)absolute(apPlayerInfo[t]->m_Score) / 10, TIME_MINS_CENTISECS, aScore[t], sizeof(aScore[t]));
 					else if(GameClient()->m_GameInfo.m_TimeScore)
 					{
-						if(apPlayerInfo[t]->m_Score != FinishTime::NOT_FINISHED_TIMESCORE)
+						CGameClient::CClientData &ClientData = GameClient()->m_aClients[apPlayerInfo[t]->m_ClientId];
+						if(GameClient()->m_ReceivedDDNetPlayerFinishTimes && ClientData.m_FinishTimeSeconds != FinishTime::NOT_FINISHED_MILLIS)
+						{
+							int64_t TimeSeconds = static_cast<int64_t>(absolute(ClientData.m_FinishTimeSeconds));
+							int64_t TimeMillis = TimeSeconds * 1000 + (absolute(ClientData.m_FinishTimeMillis) % 1000);
+
+							str_time(TimeMillis / 10, TIME_HOURS, aScore[t], sizeof(aScore[t]));
+						}
+						else if(apPlayerInfo[t]->m_Score != FinishTime::NOT_FINISHED_TIMESCORE)
+						{
 							str_time((int64_t)absolute(apPlayerInfo[t]->m_Score) * 100, TIME_HOURS, aScore[t], sizeof(aScore[t]));
+						}
 						else
 							aScore[t][0] = 0;
 					}
@@ -603,7 +629,7 @@ void CHud::RenderCursor()
 	if(Client()->State() != IClient::STATE_DEMOPLAYBACK && GameClient()->m_Snap.m_pLocalCharacter)
 	{
 		// Render local cursor
-		CurWeapon = maximum(0, GameClient()->m_Snap.m_pLocalCharacter->m_Weapon % NUM_WEAPONS);
+		CurWeapon = maximum(0, GameClient()->m_aClients[GameClient()->m_Snap.m_LocalClientId].m_Predicted.m_ActiveWeapon);
 		TargetPos = GameClient()->m_Controls.m_aTargetPos[g_Config.m_ClDummy];
 	}
 	else if(g_Config.m_ClCursorOpacitySpec > 0 && GameClient()->m_Snap.m_SpecInfo.m_Active && GameClient()->m_Snap.m_SpecInfo.m_SpectatorId == SPEC_FREEVIEW)
@@ -1318,7 +1344,7 @@ void CHud::RenderSpectatorCount()
 	float x = StartX + 2;
 
 	TextRender()->SetFontPreset(EFontPreset::ICON_FONT);
-	TextRender()->Text(x, y, Fontsize, FontIcons::FONT_ICON_EYE, -1.0f);
+	TextRender()->Text(x, y, Fontsize, FontIcon::EYE, -1.0f);
 	TextRender()->SetFontPreset(EFontPreset::DEFAULT_FONT);
 	TextRender()->Text(x + Fontsize + 3.f, y, Fontsize, aBuf, -1.0f);
 }
@@ -1592,7 +1618,7 @@ void CHud::RenderSpectatorHud()
 		Graphics()->DrawRect(TagX, m_Height - 12.0f, TagWidth, 10.0f, ColorRGBA(1.0f, 1.0f, 1.0f, AutoSpecCameraEnabled ? 0.50f : 0.10f), IGraphics::CORNER_ALL, 2.5f);
 		TextRender()->TextColor(1, 1, 1, AutoSpecCameraEnabled ? 1.0f : 0.65f);
 		TextRender()->SetFontPreset(EFontPreset::ICON_FONT);
-		TextRender()->Text(TagX + Padding, m_Height - 10.0f, 6.0f, FontIcons::FONT_ICON_CAMERA, -1.0f);
+		TextRender()->Text(TagX + Padding, m_Height - 10.0f, 6.0f, FontIcon::CAMERA, -1.0f);
 		TextRender()->SetFontPreset(EFontPreset::DEFAULT_FONT);
 		TextRender()->Text(TagX + Padding + IconWidth + Padding, m_Height - 10.0f, 6.0f, pLabelText, -1.0f);
 		TextRender()->TextColor(1, 1, 1, 1);
@@ -1964,9 +1990,7 @@ void CHud::FreezeHelpers()
 		if(g_Config.m_ClShowFrozenText > 0)
 			TextRender()->Text(m_Width / 2 - TextRender()->TextWidth(10, aBuf, -1, -1.0f) / 2, 12, 10, aBuf, -1.0f);
 
-		// str_format(aBuf, sizeof(aBuf), "%d", GameClient()->m_aClients[GameClient()->m_Snap.m_LocalClientId].m_PrevPredicted.m_FreezeEnd);
-		// str_format(aBuf, sizeof(aBuf), "%d", g_Config.m_ClWhatsMyPing);
-		// TextRender()->Text(0, m_Width / 2 - TextRender()->TextWidth(0, 10, aBuf, -1, -1.0f) / 2, 20, 10, aBuf, -1.0f);
+		// I told the clanker to rewrite this 
 		if(g_Config.m_ClShowFrozenHud > 0 && !GameClient()->m_Scoreboard.IsActive() && !(LocalTeamID == 0 && g_Config.m_ClFrozenHudTeamOnly))
 		{
 			CTeeRenderInfo FreezeInfo;
@@ -1979,82 +2003,133 @@ void CHud::FreezeHelpers()
 			FreezeInfo.m_ColorFeet = ColorRGBA(1, 1, 1);
 			FreezeInfo.m_CustomColoredSkin = false;
 
-			float progressiveOffset = 0.0f;
 			float TeeSize = g_Config.m_ClFrozenHudTeeSize;
-			int MaxTees = (int)(8.3 * (m_Width / m_Height) * 13.0f / TeeSize);
+			int MaxTees = (int)(8.3f * (m_Width / m_Height) * 13.0f / TeeSize);
 			if(!g_Config.m_ClShowfps && !g_Config.m_ClShowpred)
-				MaxTees = (int)(9.5 * (m_Width / m_Height) * 13.0f / TeeSize);
+				MaxTees = (int)(9.5f * (m_Width / m_Height) * 13.0f / TeeSize);
 			int MaxRows = g_Config.m_ClFrozenMaxRows;
-			float StartPos = m_Width / 2 + 38.0f * (m_Width / m_Height) / 1.78;
+			float StartPos = m_Width / 2 + 38.0f * (m_Width / m_Height) / 1.78f;
 
-			int TotalRows = std::min(MaxRows, (NumInTeam + MaxTees - 1) / MaxTees);
+			std::vector<int> vDisplayClients;
+			vDisplayClients.reserve(MAX_CLIENTS);
+
+			for(int i = 0; i < MAX_CLIENTS; i++)
+			{
+				if(!GameClient()->m_Snap.m_apPlayerInfos[i])
+					continue;
+				if(GameClient()->m_Teams.Team(i) != LocalTeamID)
+					continue;
+
+				if(g_Config.m_ClWarList && g_Config.m_ClWarlistFrozenTeeFlags != 0 && i != GameClient()->m_aLocalIds[0] && i != GameClient()->m_aLocalIds[1])
+				{
+					const CWarDataCache *pWarData = &GameClient()->m_WarList.GetWarData(i);
+					const bool ShowNoneType = IsFlagSet(g_Config.m_ClWarlistFrozenTeeFlags, 0) && pWarData->m_WarTypeIndex == -1;
+
+					if(!IsFlagSet(g_Config.m_ClWarlistFrozenTeeFlags, pWarData->m_WarTypeIndex) && !ShowNoneType)
+						continue;
+				}
+
+				vDisplayClients.push_back(i);
+			}
+
+			const int TotalCandidates = (int)vDisplayClients.size();
+			if(TotalCandidates == 0)
+				return;
+
+			bool Overflow = TotalCandidates > MaxTees * MaxRows;
+
+			// We keep the original semantics: if overflowing, first row(s) are frozen, then non-frozen
+			std::vector<int> vOrdered;
+			vOrdered.reserve(TotalCandidates);
+
+			if(Overflow)
+			{
+				// first all frozen
+				for(int Idx : vDisplayClients)
+				{
+					bool Frozen = GameClient()->m_aClients[Idx].m_FreezeEnd > 0 || GameClient()->m_aClients[Idx].m_DeepFrozen;
+					if(Frozen)
+						vOrdered.push_back(Idx);
+				}
+				// then all non-frozen
+				for(int Idx : vDisplayClients)
+				{
+					bool Frozen = GameClient()->m_aClients[Idx].m_FreezeEnd > 0 || GameClient()->m_aClients[Idx].m_DeepFrozen;
+					if(!Frozen)
+						vOrdered.push_back(Idx);
+				}
+			}
+			else
+			{
+				vOrdered = vDisplayClients;
+			}
+
+			const int NumDisplayable = std::min((int)vOrdered.size(), MaxTees * MaxRows);
+
+			int TotalRows = (NumDisplayable + MaxTees - 1) / MaxTees;
+			TotalRows = std::min(TotalRows, MaxRows);
+
+			int FirstRowCount = NumDisplayable >= MaxTees ? MaxTees : NumDisplayable;
+
 			Graphics()->TextureClear();
 			Graphics()->QuadsBegin();
 			Graphics()->SetColor(0.0f, 0.0f, 0.0f, 0.4f);
-			Graphics()->DrawRectExt(StartPos - TeeSize / 2, 0.0f, TeeSize * std::min(NumInTeam, MaxTees), TeeSize + 3.0f + (TotalRows - 1) * TeeSize, 5.0f, IGraphics::CORNER_B);
+			Graphics()->DrawRectExt(StartPos - TeeSize / 2,
+				0.0f,
+				TeeSize * FirstRowCount,
+				TeeSize + 3.0f + (TotalRows - 1) * TeeSize,
+				5.0f,
+				IGraphics::CORNER_B);
 			Graphics()->QuadsEnd();
-
-			bool Overflow = NumInTeam > MaxTees * MaxRows;
-
-			int NumDisplayed = 0;
+			
+			float progressiveOffset = 0.0f;
 			int NumInRow = 0;
 			int CurrentRow = 0;
 
-			for(int OverflowIndex = 0; OverflowIndex < 1 + Overflow; OverflowIndex++)
+			for(int n = 0; n < NumDisplayable; ++n)
 			{
-				for(int i = 0; i < MAX_CLIENTS && NumDisplayed < MaxTees * MaxRows; i++)
+				const int i = vOrdered[n];
+
+				bool Frozen = GameClient()->m_aClients[i].m_FreezeEnd > 0 || GameClient()->m_aClients[i].m_DeepFrozen;
+
+				NumInRow++;
+				if(NumInRow > MaxTees)
 				{
-					if(!GameClient()->m_Snap.m_apPlayerInfos[i])
-						continue;
-					if(GameClient()->m_Teams.Team(i) == LocalTeamID)
-					{
-						bool Frozen = false;
-						CTeeRenderInfo TeeInfo = GameClient()->m_aClients[i].m_RenderInfo;
-						if(GameClient()->m_aClients[i].m_FreezeEnd > 0 || GameClient()->m_aClients[i].m_DeepFrozen)
-						{
-							if(!g_Config.m_ClShowFrozenHudSkins)
-								TeeInfo = FreezeInfo;
-							Frozen = true;
-						}
-
-						if(Overflow && Frozen && OverflowIndex == 0)
-							continue;
-						if(Overflow && !Frozen && OverflowIndex == 1)
-							continue;
-
-						NumDisplayed++;
-						NumInRow++;
-						if(NumInRow > MaxTees)
-						{
-							NumInRow = 1;
-							progressiveOffset = 0.0f;
-							CurrentRow++;
-						}
-
-						TeeInfo.m_Size = TeeSize;
-						const CAnimState *pIdleState = CAnimState::GetIdle();
-						vec2 OffsetToMid;
-						RenderTools()->GetRenderTeeOffsetToRenderedTee(pIdleState, &TeeInfo, OffsetToMid);
-						vec2 TeeRenderPos(StartPos + progressiveOffset, TeeSize * (0.7f) + CurrentRow * TeeSize);
-						float Alpha = 1.0f;
-						CNetObj_Character CurChar = GameClient()->m_aClients[i].m_RenderCur;
-						if(g_Config.m_ClShowFrozenHudSkins && Frozen)
-						{
-							Alpha = 0.6f;
-							TeeInfo.m_ColorBody.r *= 0.4;
-							TeeInfo.m_ColorBody.g *= 0.4;
-							TeeInfo.m_ColorBody.b *= 0.4;
-							TeeInfo.m_ColorFeet.r *= 0.4;
-							TeeInfo.m_ColorFeet.g *= 0.4;
-							TeeInfo.m_ColorFeet.b *= 0.4;
-						}
-						if(Frozen)
-							RenderTools()->RenderTee(pIdleState, &TeeInfo, EMOTE_PAIN, vec2(1.0f, 0.0f), TeeRenderPos, Alpha);
-						else
-							RenderTools()->RenderTee(pIdleState, &TeeInfo, CurChar.m_Emote, vec2(1.0f, 0.0f), TeeRenderPos);
-						progressiveOffset += TeeSize;
-					}
+					NumInRow = 1;
+					progressiveOffset = 0.0f;
+					CurrentRow++;
 				}
+
+				CTeeRenderInfo TeeInfo = GameClient()->m_aClients[i].m_RenderInfo;
+				if(Frozen && !g_Config.m_ClShowFrozenHudSkins)
+				{
+					TeeInfo = FreezeInfo;
+				}
+
+				TeeInfo.m_Size = TeeSize;
+				const CAnimState *pIdleState = CAnimState::GetIdle();
+				vec2 OffsetToMid;
+				RenderTools()->GetRenderTeeOffsetToRenderedTee(pIdleState, &TeeInfo, OffsetToMid);
+				vec2 TeeRenderPos(StartPos + progressiveOffset, TeeSize * 0.7f + CurrentRow * TeeSize);
+				float Alpha = 1.0f;
+				CNetObj_Character CurChar = GameClient()->m_aClients[i].m_RenderCur;
+
+				if(g_Config.m_ClShowFrozenHudSkins && Frozen)
+				{
+					Alpha = 0.6f;
+					TeeInfo.m_ColorBody.r *= 0.4f;
+					TeeInfo.m_ColorBody.g *= 0.4f;
+					TeeInfo.m_ColorBody.b *= 0.4f;
+					TeeInfo.m_ColorFeet.r *= 0.4f;
+					TeeInfo.m_ColorFeet.g *= 0.4f;
+					TeeInfo.m_ColorFeet.b *= 0.4f;
+				}
+				if(Frozen)
+					RenderTools()->RenderTee(pIdleState, &TeeInfo, EMOTE_PAIN, vec2(1.0f, 0.0f), TeeRenderPos, Alpha);
+				else
+					RenderTools()->RenderTee(pIdleState, &TeeInfo, CurChar.m_Emote, vec2(1.0f, 0.0f), TeeRenderPos);
+
+				progressiveOffset += TeeSize;
 			}
 		}
 	}

@@ -27,6 +27,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <base/log.h>
 
 void CEClient::OnChatMessage(int ClientId, int Team, const char *pMsg)
 {
@@ -259,6 +260,8 @@ void CEClient::GoresModeSave()
 
 	const CBindSlot BindSlot = GameClient()->m_Binds.GetBindSlot(pKeyName);
 	const char *pBind = GameClient()->m_Binds.GetKeyBinding(BindSlot.m_ModifierMask, BindSlot.m_Key);
+	if(!pBind)
+		return;
 	str_copy(g_Config.m_ClGoresModeSaved, pBind);
 
 	GameClient()->m_Binds.Bind(Key, "+fire;+prevweapon");
@@ -323,10 +326,6 @@ void CEClient::OnConnect()
 				g_Config.m_ClGoresMode = 0;
 			}
 		}
-
-	
-		if(g_Config.m_ClListsInfo)
-			OnlineInfo();
 	}
 }
 
@@ -401,7 +400,7 @@ void CEClient::UpdateVolleyball()
 		if(g_Config.m_EcVolleyBallBetterBall > 1)
 			IsVolleyBall = true;
 		else
-			IsVolleyBall = str_startswith_nocase(Client()->GetCurrentMap(), "volleyball");
+			IsVolleyBall = str_startswith_nocase(GameClient()->Map()->BaseName(), "volleyball");
 	};
 	for(auto &Client : GameClient()->m_aClients)
 	{

@@ -54,14 +54,16 @@ CChat::CChat()
 {
 	m_Mode = MODE_NONE;
 
+
 	m_Input.SetClipboardLineCallback([this](const char *pStr) {
 		if(Client()->m_FoxNetVersion != 0 && Client()->RconAuthed())
 		{
-			SendChat(TEAM_FLOCK, pStr);
-			AddHistoryEntry(pStr);
+			if(Client()->m_FoxNetVersion != 0 && Client()->RconAuthed())
+			{
+				SendChat(TEAM_FLOCK, pStr);
+				AddHistoryEntry(pStr);
+			}
 		}
-		else
-			SendChatQueued(pStr);
 	});
 	m_Input.SetCalculateOffsetCallback([this]() { return m_IsInputCensored; });
 	m_Input.SetDisplayTextCallback([this](char *pStr, size_t NumChars) {
@@ -636,7 +638,7 @@ void CChat::StoreSave(const char *pText)
 	const char *apColumns[4] = {
 		aTimestamp,
 		aName,
-		Client()->GetCurrentMap(),
+		GameClient()->Map()->BaseName(),
 		aSaveCode,
 	};
 
@@ -1138,7 +1140,7 @@ void CChat::OnPrepareLines(float y)
 			else if(Line.m_Friend && g_Config.m_ClMessageFriend)
 			{
 				TextRender()->TextColor(color_cast<ColorRGBA>(ColorHSLA(g_Config.m_ClFriendColor)).WithAlpha(1.0f));
-				TextRender()->CreateOrAppendTextContainer(Line.m_TextContainerIndex, &LineCursor, "♥ ");
+				TextRender()->CreateOrAppendTextContainer(Line.m_TextContainerIndex, &LineCursor, g_Config.m_ClFriendPrefix);
 			}
 		}
 
@@ -1564,7 +1566,7 @@ bool CChat::ChatDetection(int ClientId, int Team, const char *pLine)
 					// Skip Wartype None
 					for(size_t WarlistType = 1; WarlistType < GameClient()->m_WarList.m_WarTypes.size(); ++WarlistType)
 					{
-						if(IsFlagSet(g_Config.m_ClAutoAddFlags, WarlistType))
+						if(IsFlagSet(g_Config.m_ClWarlistAutoAddFlags, WarlistType))
 							continue;
 						const char *pWarName = GameClient()->m_WarList.m_WarTypes[WarlistType]->m_aWarName;
 							
@@ -1624,11 +1626,10 @@ bool CChat::ChatDetection(int ClientId, int Team, const char *pLine)
 				{
 					const char *PName = str_find_nocase(pLine, "'");
 					const char *NameLength = str_find_nocase(pLine, "' ");
-					using namespace std;
 					if(str_find_nocase(pLine, g_Config.m_ClAutoNotifyName))
 					{
 						int nLength = str_length(PName) - str_length(NameLength);
-						string Name(PName);
+						std::string Name(PName);
 						Name.erase(nLength);
 						Name.erase(Name.begin());
 

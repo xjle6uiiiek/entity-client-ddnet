@@ -4,12 +4,12 @@
 
 #include <base/color.h>
 
+#include <engine/font_icons.h>
+
 #include <game/client/components/binds.h>
 #include <game/client/gameclient.h>
 #include <game/client/ui.h>
 #include <game/localization.h>
-
-using namespace FontIcons;
 
 bool CKeyBinder::OnInput(const IInput::CEvent &Event)
 {
@@ -41,7 +41,7 @@ CKeyBinder::CKeyReaderResult CKeyBinder::DoKeyReader(CButtonContainer *pReaderBu
 	pRect->VSplitRight(pRect->h, &KeyReaderButton, &ClearButton);
 
 	const int ClearButtonResult = Ui()->DoButton_FontIcon(
-		pClearButton, FONT_ICON_TRASH,
+		pClearButton, FontIcon::TRASH,
 		Result.m_Bind == CBindSlot(KEY_UNKNOWN, KeyModifier::NONE) ? 1 : 0,
 		&ClearButton, BUTTONFLAG_LEFT, IGraphics::CORNER_R);
 
@@ -102,16 +102,12 @@ CKeyBinder::CKeyReaderResult CKeyBinder::DoKeyReader(CButtonContainer *pReaderBu
 	CUIRect KeyReaderButton, ClearButton;
 	pRect->VSplitRight(pRect->h, &KeyReaderButton, &ClearButton);
 
-	const int ButtonResult = Ui()->DoButtonLogic(pReaderButton, 0, &KeyReaderButton, BUTTONFLAG_LEFT | BUTTONFLAG_RIGHT);
+	const int ButtonResult = Ui()->DoButtonLogic(pReaderButton, 0, &KeyReaderButton, BUTTONFLAG_LEFT);
 	if(ButtonResult == 1 || Activate)
 	{
 		m_pKeyReaderId = pReaderButton;
 		m_TakeKey = true;
 		m_Key = std::nullopt;
-	}
-	else if(ButtonResult == 2)
-	{
-		Result.m_Bind = CBindSlot(KEY_UNKNOWN, KeyModifier::NONE);
 	}
 
 	if(m_pKeyReaderId == pReaderButton && m_Key.has_value())

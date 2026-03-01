@@ -322,6 +322,13 @@ const CServerInfo *CServerBrowser::SortedGet(int Index) const
 	return &m_vpServerlist[m_vSortedServerlist[Index]]->m_Info;
 }
 
+const CServerInfo *CServerBrowser::Get(int Index) const
+{
+	if(Index < 0 || Index >= (int)m_vpServerlist.size())
+		return nullptr;
+	return &m_vpServerlist[Index]->m_Info;
+}
+
 int CServerBrowser::GenerateToken(const NETADDR &Addr) const
 {
 	SHA256_CTX Sha256;
@@ -417,6 +424,11 @@ void CServerBrowser::Filter()
 	m_vSortedServerlist.clear();
 	m_vSortedServerlist.reserve(m_vpServerlist.size());
 
+	for(auto &Community : m_vCommunities)
+	{
+		Community.m_NumPlayers = 0;
+	}
+
 	// filter the servers
 	for(int ServerIndex = 0; ServerIndex < (int)m_vpServerlist.size(); ServerIndex++)
 	{
@@ -441,7 +453,7 @@ void CServerBrowser::Filter()
 			Filtered = true;
 		else
 		{
-			if(!Communities().empty())
+			if(!Communities().empty() && m_LoadedCustomCommunities)
 			{
 				if(m_ServerlistType == IServerBrowser::TYPE_INTERNET || m_ServerlistType == IServerBrowser::TYPE_FAVORITES)
 				{
@@ -573,16 +585,34 @@ void CServerBrowser::Filter()
 			}
 		}
 
+		UpdateServerFriends(&Info);
+
 		if(!Filtered)
 		{
-			UpdateServerFriends(&Info);
-
 			if(!g_Config.m_BrFilterFriends || Info.m_FriendState != IFriends::FRIEND_NO)
 			{
 				m_NumSortedPlayers += Info.m_NumFilteredPlayers;
 				m_vSortedServerlist.push_back(ServerIndex);
 			}
 		}
+
+		if(Info.m_NumClients > 0)
+		{
+			auto Community = std::find_if(m_vCommunities.begin(), m_vCommunities.end(), [Info](const auto &Elem) {
+				return str_comp(Elem.Id(), Info.m_aCommunityId) == 0;
+			});
+			if(Community != m_vCommunities.end())
+			{
+				Community->m_NumPlayers += Info.m_NumClients;
+			}
+		}
+	}
+
+	if(m_vCommunities.size() > 1)
+	{
+		std::stable_sort(m_vCommunities.begin(), m_vCommunities.end() - 1, [](const CCommunity &Lhs, const CCommunity &Rhs) {
+			return Lhs.NumPlayers() > Rhs.NumPlayers();
+		});
 	}
 }
 
@@ -1349,6 +1379,7 @@ const json_value *CServerBrowser::LoadDDNetInfo()
 		UpdateServerRank(&pEntry->m_Info);
 	}
 	ValidateServerlistType();
+	RequestResort();
 	return m_pDDNetInfo;
 }
 
@@ -1881,13 +1912,15 @@ void CCommunityCache::Update(bool Force)
 		const size_t CommunityIndex = m_pServerBrowser->GetCurrentType() - IServerBrowser::TYPE_FAVORITE_COMMUNITY_1;
 		std::vector<const CCommunity *> vpFavoriteCommunities = m_pServerBrowser->FavoriteCommunities();
 		dbg_assert(CommunityIndex < vpFavoriteCommunities.size(), "Invalid favorite community serverbrowser type");
-		m_pCountryTypeFilterKey = vpFavoriteCommunities[CommunityIndex]->Id();
+		if(vpFavoriteCommunities[CommunityIndex]->Id()[0] != '\0')
+			m_pCountryTypeFilterKey = vpFavoriteCommunities[CommunityIndex]->Id();
+		else
+			m_pCountryTypeFilterKey = IServerBrowser::COMMUNITY_ALL;
 	}
 	else
 	{
 		m_pCountryTypeFilterKey = IServerBrowser::COMMUNITY_ALL;
 	}
-
 	m_pServerBrowser->CleanFilters();
 }
 
@@ -2347,7 +2380,7 @@ void CExcludedCommunityTypeFilterList::Save(IConfigManager *pConfigManager) cons
 void CServerBrowser::CleanFilters()
 {
 	// Keep filters if we failed to load any communities
-	if(Communities().empty())
+	if(Communities().empty() || !m_LoadedCustomCommunities) // Don't clean filters before custom communities have been loaded
 		return;
 	FavoriteCommunitiesFilter().Clean(Communities());
 	CommunitiesFilter().Clean(Communities());

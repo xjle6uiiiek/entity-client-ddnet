@@ -13,6 +13,10 @@ Add scripts to your config dir then run them with `chai [scriptname] [args]`
 > [!CAUTION]
 > There are no runtime restrictions, you can easily `while (true) {}` yourself or run out of memory, be careful!
 
+<details>
+
+<summary>chai script capabilities</summary>
+
 ```js
 var a // Declare a variable
 a = 1 // Set it
@@ -70,6 +74,8 @@ Here is a list of states which are available:
 | `int` | `state("id", string Name)` | Finds and returns a client ID by player name (exact or case-insensitive match). |
 | `string` | `state("name", int Id)` | Returns the name of a player given their client ID. |
 | `string` | `state("clan", int Id)` | Returns the clan name of a player given their client ID. |
+| `string` | `state("player_name")` | Returns the value of config player_name. |
+| `string` | `state("dummy_name")` | Returns the value of config dummy_name. |
 | `bool` | `client_info("exists", int Id)` | Whether the ID exists. |
 | `int` | `client_info("team", int Id)` | Team of ID. |
 | `int` | `client_info("ddnet_team", int Id)` | DDRace team of ID. |
@@ -147,6 +153,9 @@ print(re.replace(re.compile("\\d"), "h3ll0", true, fun[](str, match, group) { //
 	return str
 }))
 ```
+
+</details>
+
 # Setting Pages:
 
 ### Main Settings

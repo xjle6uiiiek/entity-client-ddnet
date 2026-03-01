@@ -262,6 +262,7 @@ public:
 	void RequestResort() { m_NeedResort = true; }
 
 	int NumServers() const override { return m_vpServerlist.size(); }
+	const CServerInfo *Get(int Index) const override;
 	int Players(const CServerInfo &Item) const override;
 	int Max(const CServerInfo &Item) const override;
 	int NumSortedServers() const override { return m_vSortedServerlist.size(); }
@@ -422,6 +423,7 @@ private:
 	static bool ParseCommunityServers(CCommunity *pCommunity, const json_value &Servers);
 	
 	// TClient
+	bool m_LoadedCustomCommunities = false;
 	std::function<void(std::vector<json_value *> &)> m_CustomCommunitiesFunction = nullptr;
 	friend class CCustomCommunities;
 };
