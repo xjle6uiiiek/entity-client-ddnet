@@ -278,7 +278,7 @@ void CEClient::OnlineInfo()
 
 			CWarDataCache &WarData = GameClient()->m_WarList.GetWarData(Client.ClientId());
 			bool Matches = WarData.m_WarGroupMatches[WarlistType];
-			bool Muted = WarData.IsMuted;
+			bool Muted = WarData.m_IsMuted;
 
 			if(Muted && WarlistType == 1)
 				Mutes++;

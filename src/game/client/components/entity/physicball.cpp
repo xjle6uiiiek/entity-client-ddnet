@@ -416,8 +416,8 @@ bool CPhysicBalls::KillBall(const CBall *pBall)
 	if(!pBall)
 		return false;
 
-	auto it = std::find_if(m_vBalls.begin(), m_vBalls.end(), [&](const CBall &b) { return &b == pBall; });
-	if(it != m_vBalls.end())
+	auto It = std::find_if(m_vBalls.begin(), m_vBalls.end(), [&](const CBall &b) { return &b == pBall; });
+	if(It != m_vBalls.end())
 	{
 		for(int i = 0; i < 16; i++)
 		{
@@ -440,7 +440,7 @@ bool CPhysicBalls::KillBall(const CBall *pBall)
 			GameClient()->m_Particles.Add(CParticles::GROUP_GENERAL, &Particle);
 		}
 
-		m_vBalls.erase(it);
+		m_vBalls.erase(It);
 		return true;
 	}
 	return false;

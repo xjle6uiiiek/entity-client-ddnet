@@ -2856,7 +2856,7 @@ void CMenus::RenderSettingsVisual(CUIRect MainView)
 	CUIRect Label, Button;
 
 	// left side in settings menu
-	CUIRect  Cosmetics, Trails, PhysicBalls, ServerRainbow, TileOutlines,
+	CUIRect Cosmetics, Trails, PhysicBalls, ServerRainbow, TileOutlines,
 		Miscellaneous, MapOverview, DiscordRpc, ChatBubbles, PlayerIndicator, BgDraw, SweatMode;
 	MainView.VSplitMid(&Cosmetics, &Miscellaneous);
 
@@ -3572,7 +3572,7 @@ void CMenus::RenderSettingsVisual(CUIRect MainView)
 			MapOverview.Draw(BackgroundColor, IGraphics::CORNER_ALL, CornerRoundness);
 			MapOverview.VMargin(Margin, &MapOverview);
 
-			MapOverview.HSplitTop(HeaderHeight, &Button, &MapOverview	);
+			MapOverview.HSplitTop(HeaderHeight, &Button, &MapOverview);
 			Ui()->DoLabel(&Button, Localize("Map Overview"), HeaderSize, HeaderAlignment);
 			{
 				DoButton_CheckBoxAutoVMarginAndSet(&g_Config.m_ClMapOverview, "Enable map overview", &g_Config.m_ClMapOverview, &MapOverview, LineSize);
@@ -3907,7 +3907,7 @@ int CMenus::DoButtonLineSize_Menu(CButtonContainer *pButtonContainer, const char
 	return Ui()->DoButtonLogic(pButtonContainer, Checked, pRect, BUTTONFLAG_ALL);
 }
 
-void CMenus::RenderFontIcon(const CUIRect Rect, const char *pText, float Size, int Align)
+void CMenus::RenderFontIcon(CUIRect Rect, const char *pText, float Size, int Align)
 {
 	TextRender()->SetFontPreset(EFontPreset::ICON_FONT);
 	TextRender()->SetRenderFlags(ETextRenderFlags::TEXT_RENDER_FLAG_ONLY_ADVANCE_WIDTH | ETextRenderFlags::TEXT_RENDER_FLAG_NO_X_BEARING | ETextRenderFlags::TEXT_RENDER_FLAG_NO_Y_BEARING);

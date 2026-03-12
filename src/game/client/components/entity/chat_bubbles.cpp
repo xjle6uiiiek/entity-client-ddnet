@@ -90,7 +90,7 @@ void CChatBubbles::AddBubble(int ClientId, int Team, const char *pText)
 			return;
 		if(GameClient()->m_aClients[ClientId].m_Foe)
 			return;
-		if(GameClient()->m_WarList.m_WarPlayers[ClientId].IsMuted)
+		if(GameClient()->m_WarList.m_WarPlayers[ClientId].m_IsMuted)
 			return;
 		else if(g_Config.m_ClWarList && g_Config.m_ClHideEnemyChat && GameClient()->m_WarList.GetWarData(ClientId).m_WarGroupMatches[1])
 			return;
@@ -134,13 +134,13 @@ void CChatBubbles::AddBubble(int ClientId, int Team, const char *pText)
 
 void CChatBubbles::RemoveBubble(int ClientId, CBubble Bubble)
 {
-	for(auto it = m_avChatBubbles[ClientId].begin(); it != m_avChatBubbles[ClientId].end(); ++it)
+	for(auto It = m_avChatBubbles[ClientId].begin(); It != m_avChatBubbles[ClientId].end(); ++It)
 	{
-		if(*it == Bubble)
+		if(*It == Bubble)
 		{
-			TextRender()->DeleteTextContainer(it->m_TextContainerIndex);
-			it->m_TextContainerIndex.Reset();
-			m_avChatBubbles[ClientId].erase(it);
+			TextRender()->DeleteTextContainer(It->m_TextContainerIndex);
+			It->m_TextContainerIndex.Reset();
+			m_avChatBubbles[ClientId].erase(It);
 			UpdateBubbleOffsets(ClientId);
 			return;
 		}

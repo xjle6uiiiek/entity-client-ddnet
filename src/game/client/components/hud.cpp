@@ -8,10 +8,10 @@
 #include "voting.h"
 
 #include <base/color.h>
-#include <base/time.h>
 #include <base/math.h>
 #include <base/str.h>
 #include <base/system.h>
+#include <base/time.h>
 #include <base/vmath.h>
 
 #include <engine/client.h>
