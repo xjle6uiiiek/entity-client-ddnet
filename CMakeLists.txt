@@ -2635,8 +2635,8 @@ if(CLIENT)
     race.h
     render.cpp
     render.h
-    tasnet_debug_path.cpp
-    tasnet_debug_path.h
+    debug_path.cpp
+    debug_path.h
     sixup_translate_connless.cpp
     sixup_translate_game.cpp
     sixup_translate_snapshot.cpp

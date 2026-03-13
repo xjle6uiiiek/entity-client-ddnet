@@ -1,4 +1,4 @@
-#include "tasnet_debug_path.h"
+#include "debug_path.h"
 
 #include <game/collision.h>
 #include <game/mapitems.h>
@@ -10,7 +10,7 @@
 #include <queue>
 #include <game/gamecore.h>
 
-CTasDebugPath::CTasDebugPath() :
+CDebugPath::CDebugPath() :
 	m_pCollision(nullptr),
 	m_Width(0),
 	m_Height(0),
@@ -21,7 +21,7 @@ CTasDebugPath::CTasDebugPath() :
 {
 }
 
-void CTasDebugPath::Init(CCollision *pCollision, int SubDiv)
+void CDebugPath::Init(CCollision *pCollision, int SubDiv)
 {
 	m_pCollision = pCollision;
 	m_SubDiv = std::max(1, SubDiv);
@@ -43,28 +43,28 @@ void CTasDebugPath::Init(CCollision *pCollision, int SubDiv)
 	m_Initialized = !m_vSubPassable.empty();
 }
 
-bool CTasDebugPath::IsInitialized() const
+bool CDebugPath::IsInitialized() const
 {
 	return m_Initialized;
 }
 
-bool CTasDebugPath::SubCellInBounds(int X, int Y) const
+bool CDebugPath::SubCellInBounds(int X, int Y) const
 {
 	return X >= 0 && X < m_SubWidth && Y >= 0 && Y < m_SubHeight;
 }
 
-int CTasDebugPath::SubCellIndex(int X, int Y) const
+int CDebugPath::SubCellIndex(int X, int Y) const
 {
 	return Y * m_SubWidth + X;
 }
 
-vec2 CTasDebugPath::SubCellCenter(int X, int Y) const
+vec2 CDebugPath::SubCellCenter(int X, int Y) const
 {
 	const float Size = 32.0f / (float)m_SubDiv;
 	return vec2(X * Size + Size * 0.5f, Y * Size + Size * 0.5f);
 }
 
-bool CTasDebugPath::SubCellSafe(int X, int Y) const
+bool CDebugPath::SubCellSafe(int X, int Y) const
 {
 	if(!SubCellInBounds(X, Y))
 		return false;
@@ -72,7 +72,7 @@ bool CTasDebugPath::SubCellSafe(int X, int Y) const
 	return Index >= 0 && Index < (int)m_vSubPassable.size() && m_vSubPassable[Index] != 0;
 }
 
-bool CTasDebugPath::SubCellGrounded(int X, int Y) const
+bool CDebugPath::SubCellGrounded(int X, int Y) const
 {
 	if(!SubCellInBounds(X, Y))
 		return false;
@@ -80,7 +80,7 @@ bool CTasDebugPath::SubCellGrounded(int X, int Y) const
 	return Index >= 0 && Index < (int)m_vSubGrounded.size() && m_vSubGrounded[Index] != 0;
 }
 
-bool CTasDebugPath::SubCellFinish(int X, int Y) const
+bool CDebugPath::SubCellFinish(int X, int Y) const
 {
 	if(!SubCellInBounds(X, Y))
 		return false;
@@ -88,7 +88,7 @@ bool CTasDebugPath::SubCellFinish(int X, int Y) const
 	return Index >= 0 && Index < (int)m_vSubFinish.size() && m_vSubFinish[Index] != 0;
 }
 
-void CTasDebugPath::CollectTouchedIndices(const vec2 &Pos, int (&aIndices)[5]) const
+void CDebugPath::CollectTouchedIndices(const vec2 &Pos, int (&aIndices)[5]) const
 {
 	for(int i = 0; i < 5; i++)
 		aIndices[i] = -1;
@@ -105,7 +105,7 @@ void CTasDebugPath::CollectTouchedIndices(const vec2 &Pos, int (&aIndices)[5]) c
 	aIndices[4] = m_pCollision->GetPureMapIndex(vec2(Pos.x, Pos.y + Hs));
 }
 
-bool CTasDebugPath::MapIndexDeath(int Index) const
+bool CDebugPath::MapIndexDeath(int Index) const
 {
 	if(!m_pCollision || Index < 0)
 		return false;
@@ -115,7 +115,7 @@ bool CTasDebugPath::MapIndexDeath(int Index) const
 	return Tile == TILE_DEATH || Front == TILE_DEATH;
 }
 
-bool CTasDebugPath::MapIndexFreeze(int Index) const
+bool CDebugPath::MapIndexFreeze(int Index) const
 {
 	if(!m_pCollision || Index < 0)
 		return false;
@@ -128,7 +128,7 @@ bool CTasDebugPath::MapIndexFreeze(int Index) const
 	       Tile == TILE_LFREEZE || Front == TILE_LFREEZE;
 }
 
-bool CTasDebugPath::MapIndexFinish(int Index) const
+bool CDebugPath::MapIndexFinish(int Index) const
 {
 	if(!m_pCollision || Index < 0)
 		return false;
@@ -138,7 +138,7 @@ bool CTasDebugPath::MapIndexFinish(int Index) const
 	return Tile == TILE_FINISH || Front == TILE_FINISH;
 }
 
-bool CTasDebugPath::IsPosInDeath(const vec2 &Pos) const
+bool CDebugPath::IsPosInDeath(const vec2 &Pos) const
 {
 	int aIndices[5];
 	CollectTouchedIndices(Pos, aIndices);
@@ -152,7 +152,7 @@ bool CTasDebugPath::IsPosInDeath(const vec2 &Pos) const
 	return false;
 }
 
-bool CTasDebugPath::IsPosInFreeze(const vec2 &Pos) const
+bool CDebugPath::IsPosInFreeze(const vec2 &Pos) const
 {
 	int aIndices[5];
 	CollectTouchedIndices(Pos, aIndices);
@@ -166,7 +166,7 @@ bool CTasDebugPath::IsPosInFreeze(const vec2 &Pos) const
 	return false;
 }
 
-bool CTasDebugPath::IsPosInFinish(const vec2 &Pos) const
+bool CDebugPath::IsPosInFinish(const vec2 &Pos) const
 {
 	int aIndices[5];
 	CollectTouchedIndices(Pos, aIndices);
@@ -180,7 +180,7 @@ bool CTasDebugPath::IsPosInFinish(const vec2 &Pos) const
 	return false;
 }
 
-bool CTasDebugPath::IsPosSafe(const vec2 &Pos) const
+bool CDebugPath::IsPosSafe(const vec2 &Pos) const
 {
 	if(!m_pCollision)
 		return false;
@@ -191,7 +191,7 @@ bool CTasDebugPath::IsPosSafe(const vec2 &Pos) const
 	return !IsPosInDeath(Pos) && !IsPosInFreeze(Pos);
 }
 
-bool CTasDebugPath::IsGroundedPos(const vec2 &Pos) const
+bool CDebugPath::IsGroundedPos(const vec2 &Pos) const
 {
 	if(!m_pCollision)
 		return false;
@@ -201,7 +201,7 @@ bool CTasDebugPath::IsGroundedPos(const vec2 &Pos) const
 	       m_pCollision->CheckPoint(Pos.x - Hs, Pos.y + Hs + 5.0f);
 }
 
-void CTasDebugPath::BuildCache()
+void CDebugPath::BuildCache()
 {
 	const size_t Size = (size_t)m_SubWidth * (size_t)m_SubHeight;
 	m_vSubPassable.assign(Size, 0);
@@ -227,7 +227,7 @@ void CTasDebugPath::BuildCache()
 	}
 }
 
-vec2 CTasDebugPath::FindNearestSafeSubCell(const vec2 &Pos, int MaxRadiusTiles) const
+vec2 CDebugPath::FindNearestSafeSubCell(const vec2 &Pos, int MaxRadiusTiles) const
 {
 	if(m_SubWidth <= 0 || m_SubHeight <= 0)
 		return vec2(-1.0f, -1.0f);
@@ -271,7 +271,7 @@ vec2 CTasDebugPath::FindNearestSafeSubCell(const vec2 &Pos, int MaxRadiusTiles) 
 	return Best;
 }
 
-void CTasDebugPath::CollectGoalSubCells(const vec2 &Goal, std::vector<int> &vGoals) const
+void CDebugPath::CollectGoalSubCells(const vec2 &Goal, std::vector<int> &vGoals) const
 {
 	vGoals.clear();
 
@@ -336,7 +336,7 @@ void CTasDebugPath::CollectGoalSubCells(const vec2 &Goal, std::vector<int> &vGoa
 	vGoals.erase(std::unique(vGoals.begin(), vGoals.end()), vGoals.end());
 }
 
-bool CTasDebugPath::BuildDistanceField(const vec2 &Goal)
+bool CDebugPath::BuildDistanceField(const vec2 &Goal)
 {
 	if(!m_Initialized)
 		return false;
@@ -416,7 +416,7 @@ bool CTasDebugPath::BuildDistanceField(const vec2 &Goal)
 	return true;
 }
 
-int CTasDebugPath::DistanceAtPos(const vec2 &Pos) const
+int CDebugPath::DistanceAtPos(const vec2 &Pos) const
 {
 	if(!m_Initialized || m_vSubDistance.empty())
 		return FIELD_INF;
@@ -450,7 +450,7 @@ int CTasDebugPath::DistanceAtPos(const vec2 &Pos) const
 	return Best;
 }
 
-bool CTasDebugPath::BuildPath(const vec2 &Start, const vec2 &Goal, std::vector<vec2> &vOutPath)
+bool CDebugPath::BuildPath(const vec2 &Start, const vec2 &Goal, std::vector<vec2> &vOutPath)
 {
 	vOutPath.clear();
 
@@ -541,7 +541,7 @@ bool CTasDebugPath::BuildPath(const vec2 &Start, const vec2 &Goal, std::vector<v
 	return vOutPath.size() >= 2;
 }
 
-bool CTasDebugPath::SamplePathMetrics(const std::vector<vec2> &vPath, const vec2 &Pos,
+bool CDebugPath::SamplePathMetrics(const std::vector<vec2> &vPath, const vec2 &Pos,
 	float &OutProgress, float &OutDistance, vec2 &OutDir) const
 {
 	OutProgress = 0.0f;
@@ -591,7 +591,7 @@ bool CTasDebugPath::SamplePathMetrics(const std::vector<vec2> &vPath, const vec2
 	return true;
 }
 
-float CTasDebugPath::ScorePathFollow(const std::vector<vec2> &vPath, const vec2 &From, const vec2 &To) const
+float CDebugPath::ScorePathFollow(const std::vector<vec2> &vPath, const vec2 &From, const vec2 &To) const
 {
 	float FromProgress = 0.0f;
 	float FromDistance = 0.0f;

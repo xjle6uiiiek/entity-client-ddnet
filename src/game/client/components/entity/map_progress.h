@@ -4,7 +4,7 @@
 #include <base/vmath.h>
 
 #include <game/client/component.h>
-#include <game/client/tasnet_debug_path.h>
+#include <game/client/debug_path.h>
 
 #include <vector>
 
@@ -25,7 +25,7 @@ private:
 	static float PathLength(const std::vector<vec2> &vPath);
 	static vec2 FindNearest(const std::vector<vec2> &vCandidates, const vec2 &Pos);
 
-	CTasDebugPath m_Path;
+	CDebugPath m_Path;
 	std::vector<vec2> m_vPath;
 	std::vector<vec2> m_vStartCandidates;
 	std::vector<vec2> m_vFinishCandidates;

@@ -1,5 +1,5 @@
-#ifndef GAME_CLIENT_COMPONENTS_TASNET_DEBUG_PATH_H
-#define GAME_CLIENT_COMPONENTS_TASNET_DEBUG_PATH_H
+#ifndef GAME_CLIENT_DEBUG_PATH_H
+#define GAME_CLIENT_DEBUG_PATH_H
 
 #include <base/vmath.h>
 
@@ -7,7 +7,7 @@
 
 class CCollision;
 
-class CTasDebugPath
+class CDebugPath
 {
 	static constexpr int FIELD_INF = 1 << 29;
 
@@ -48,7 +48,7 @@ class CTasDebugPath
 	bool BuildDistanceField(const vec2 &Goal);
 
 public:
-	CTasDebugPath();
+	CDebugPath();
 
 	void Init(CCollision *pCollision, int SubDiv = 5);
 	bool IsInitialized() const;
