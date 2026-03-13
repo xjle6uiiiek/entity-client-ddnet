@@ -2494,6 +2494,8 @@ if(CLIENT)
     components/entity/info.h
     components/entity/map_overview.cpp
     components/entity/map_overview.h 
+    components/entity/map_progress.cpp
+    components/entity/map_progress.h
     components/entity/menus_entity.cpp 
     components/entity/moving_tiles.cpp
     components/entity/moving_tiles.h 
@@ -2633,6 +2635,8 @@ if(CLIENT)
     race.h
     render.cpp
     render.h
+    tasnet_debug_path.cpp
+    tasnet_debug_path.h
     sixup_translate_connless.cpp
     sixup_translate_game.cpp
     sixup_translate_snapshot.cpp
