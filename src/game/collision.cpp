@@ -707,6 +707,15 @@ int CCollision::IsTeleCheckpoint(int Index) const
 	return 0;
 }
 
+bool CCollision::GetTeleTile(int Index, int &Type, int &Number) const
+{
+	if(Index < 0 || !m_pTele)
+		return false;
+	Type = m_pTele[Index].m_Type;
+	Number = m_pTele[Index].m_Number;
+	return Type != 0;
+}
+
 int CCollision::IsTeleportWeapon(int Index) const
 {
 	if(Index < 0 || !m_pTele)

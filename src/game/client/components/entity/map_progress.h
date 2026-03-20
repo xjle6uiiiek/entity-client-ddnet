@@ -23,10 +23,12 @@ private:
 	bool BuildPathIfNeeded(const vec2 &Pos);
 	bool GetTargetPos(vec2 &OutPos) const;
 	static float PathLength(const std::vector<vec2> &vPath);
+	static float PathLength(const std::vector<vec2> &vPath, const std::vector<unsigned char> &vTele);
 	static vec2 FindNearest(const std::vector<vec2> &vCandidates, const vec2 &Pos);
 
 	CDebugPath m_Path;
 	std::vector<vec2> m_vPath;
+	std::vector<unsigned char> m_vPathTele;
 	std::vector<vec2> m_vStartCandidates;
 	std::vector<vec2> m_vFinishCandidates;
 	vec2 m_StartPos = vec2(0.0f, 0.0f);

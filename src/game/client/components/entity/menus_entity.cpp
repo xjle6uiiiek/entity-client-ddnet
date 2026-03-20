@@ -3582,9 +3582,9 @@ void CMenus::RenderSettingsVisual(CUIRect MainView)
 				MapProgress.HSplitTop(LineSize, &Button, &MapProgress);
 				Ui()->DoScrollbarOption(&g_Config.m_ClMapProgressHeight, &g_Config.m_ClMapProgressHeight, &Button, Localize("Bar height"), 2, 30);
 				MapProgress.HSplitTop(LineSize, &Button, &MapProgress);
-				Ui()->DoScrollbarOption(&g_Config.m_ClMapProgressX, &g_Config.m_ClMapProgressX, &Button, Localize("Position X"), 0, 1000);
+				Ui()->DoScrollbarOption(&g_Config.m_ClMapProgressX, &g_Config.m_ClMapProgressX, &Button, Localize("Position X (%)"), 0, 100);
 				MapProgress.HSplitTop(LineSize, &Button, &MapProgress);
-				Ui()->DoScrollbarOption(&g_Config.m_ClMapProgressY, &g_Config.m_ClMapProgressY, &Button, Localize("Position Y"), 0, 300);
+				Ui()->DoScrollbarOption(&g_Config.m_ClMapProgressY, &g_Config.m_ClMapProgressY, &Button, Localize("Position Y (%)"), 0, 100);
 				static CButtonContainer s_MapProgressColor;
 				DoLine_ColorPicker(&s_MapProgressColor, ColorPickerLineSize, ColorPickerLabelSize, ColorPickerLineSpacing, &MapProgress, Localize("Bar color"), &g_Config.m_ClMapProgressColor, color_cast<ColorRGBA, ColorHSLA>(ColorHSLA(DefaultConfig::ClMapProgressColor)), false);
 			}

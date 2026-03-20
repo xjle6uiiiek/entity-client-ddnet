@@ -381,8 +381,8 @@ MACRO_CONFIG_INT(ClMapOverviewOpacity, ec_map_overview_opacity, 15, 0, 100, CFGF
 // Map Progress
 MACRO_CONFIG_INT(ClMapProgress, ec_map_progress, 0, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Show map progress bar")
 MACRO_CONFIG_INT(ClMapProgressDebug, ec_map_progress_debug, 0, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Show map progress debug path")
-MACRO_CONFIG_INT(ClMapProgressX, ec_map_progress_x, 150, 0, 1000, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Map progress bar X position")
-MACRO_CONFIG_INT(ClMapProgressY, ec_map_progress_y, 250, 0, 300, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Map progress bar Y position")
+MACRO_CONFIG_INT(ClMapProgressX, ec_map_progress_x, 50, 0, 100, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Map progress bar X position in percent")
+MACRO_CONFIG_INT(ClMapProgressY, ec_map_progress_y, 85, 0, 100, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Map progress bar Y position in percent")
 MACRO_CONFIG_INT(ClMapProgressWidth, ec_map_progress_width, 120, 20, 400, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Map progress bar width")
 MACRO_CONFIG_INT(ClMapProgressHeight, ec_map_progress_height, 8, 2, 30, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Map progress bar height")
 MACRO_CONFIG_COL(ClMapProgressColor, ec_map_progress_color, 5636044, CFGFLAG_CLIENT | CFGFLAG_SAVE | CFGFLAG_COLALPHA, "Map progress bar color")

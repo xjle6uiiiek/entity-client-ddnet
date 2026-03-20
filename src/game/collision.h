@@ -93,6 +93,7 @@ public:
 	int IsTeleportWeapon(int Index) const;
 	int IsTeleportHook(int Index) const;
 	int IsTeleCheckpoint(int Index) const;
+	bool GetTeleTile(int Index, int &Type, int &Number) const;
 	int IsSpeedup(int Index) const;
 	int IsTune(int Index) const;
 	void GetSpeedup(int Index, vec2 *pDir, int *pForce, int *pMaxSpeed, int *pType) const;

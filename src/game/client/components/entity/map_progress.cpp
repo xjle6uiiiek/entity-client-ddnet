@@ -18,6 +18,7 @@
 void CMapProgress::ResetState()
 {
 	m_vPath.clear();
+	m_vPathTele.clear();
 	m_HasStart = false;
 	m_HasGoal = false;
 	m_PathValid = false;
@@ -114,6 +115,19 @@ float CMapProgress::PathLength(const std::vector<vec2> &vPath)
 	return Len;
 }
 
+float CMapProgress::PathLength(const std::vector<vec2> &vPath, const std::vector<unsigned char> &vTele)
+{
+	const bool UseTele = vTele.size() + 1 == vPath.size();
+	float Len = 0.0f;
+	for(size_t i = 1; i < vPath.size(); i++)
+	{
+		if(UseTele && vTele[i - 1])
+			continue;
+		Len += distance(vPath[i - 1], vPath[i]);
+	}
+	return Len;
+}
+
 bool CMapProgress::BuildPathIfNeeded(const vec2 &Pos)
 {
 	if(m_PathValid)
@@ -143,17 +157,23 @@ bool CMapProgress::BuildPathIfNeeded(const vec2 &Pos)
 	if(!m_HasStart || !m_HasGoal)
 		return false;
 
-	if(!m_Path.BuildPath(m_StartPos, m_GoalPos, m_vPath))
+	if(!m_Path.BuildPath(m_StartPos, m_GoalPos, m_vPath, m_vPathTele, false))
 	{
-		m_PathAttempted = true;
-		return false;
+		if(!m_Path.BuildPath(m_StartPos, m_GoalPos, m_vPath, m_vPathTele, true))
+		{
+			m_PathAttempted = true;
+			return false;
+		}
 	}
 
-	m_TotalLength = PathLength(m_vPath);
+	m_TotalLength = PathLength(m_vPath, m_vPathTele);
 	m_PathValid = m_TotalLength > 0.001f;
 	m_PathAttempted = true;
 	if(!m_PathValid)
+	{
 		m_vPath.clear();
+		m_vPathTele.clear();
+	}
 
 	return m_PathValid;
 }
@@ -203,8 +223,11 @@ void CMapProgress::OnRender()
 		Graphics()->TextureClear();
 		Graphics()->LinesBegin();
 		Graphics()->SetColor(PathCol);
+		const bool UseTele = m_vPathTele.size() + 1 == m_vPath.size();
 		for(size_t i = 1; i < m_vPath.size(); i++)
 		{
+			if(UseTele && m_vPathTele[i - 1])
+				continue;
 			const IGraphics::CLineItem Line(m_vPath[i - 1].x, m_vPath[i - 1].y, m_vPath[i].x, m_vPath[i].y);
 			Graphics()->LinesDraw(&Line, 1);
 		}
@@ -217,7 +240,7 @@ void CMapProgress::OnRender()
 	float Progress = 0.0f;
 	float Dist = 0.0f;
 	vec2 Dir(0.0f, 0.0f);
-	if(!m_Path.SamplePathMetrics(m_vPath, Pos, Progress, Dist, Dir))
+	if(!m_Path.SamplePathMetrics(m_vPath, m_vPathTele, Pos, Progress, Dist, Dir))
 		return;
 
 	if(m_TotalLength <= 0.0f)
@@ -231,8 +254,10 @@ void CMapProgress::OnRender()
 
 	const float BarW = std::clamp((float)g_Config.m_ClMapProgressWidth, 1.0f, ScreenW);
 	const float BarH = std::clamp((float)g_Config.m_ClMapProgressHeight, 1.0f, ScreenH);
-	const float PosX = std::clamp((float)g_Config.m_ClMapProgressX, 0.0f, ScreenW - BarW);
-	const float PosY = std::clamp((float)g_Config.m_ClMapProgressY, 0.0f, ScreenH - BarH);
+	const float PosXPct = std::clamp((float)g_Config.m_ClMapProgressX / 100.0f, 0.0f, 1.0f);
+	const float PosYPct = std::clamp((float)g_Config.m_ClMapProgressY / 100.0f, 0.0f, 1.0f);
+	const float PosX = (ScreenW - BarW) * PosXPct;
+	const float PosY = (ScreenH - BarH) * PosYPct;
 
 	const float Rounding = std::min(std::clamp(BarH * 0.35f, 2.0f, 6.0f), BarW * 0.5f);
 
@@ -240,11 +265,20 @@ void CMapProgress::OnRender()
 
 	if(Ratio > 0.0f)
 	{
-		const float FillW = BarW * Ratio;
-		const float FillRounding = std::min(Rounding, FillW * 0.5f);
-		const int Corners = Ratio >= 0.999f ? IGraphics::CORNER_ALL : IGraphics::CORNER_L;
-		const ColorRGBA Col = color_cast<ColorRGBA>(ColorHSLA(g_Config.m_ClMapProgressColor));
-		Graphics()->DrawRect(PosX, PosY, FillW, BarH, Col, Corners, FillRounding);
+		const float FillInset = std::min(BarH * 0.15f, 1.0f);
+		const float InnerW = std::max(0.0f, BarW - FillInset * 2.0f);
+		const float InnerH = std::max(0.0f, BarH - FillInset * 2.0f);
+		const float InnerRounding = std::max(0.0f, Rounding - FillInset);
+		const float FillW = InnerW * Ratio;
+		if(FillW > 0.0f && InnerH > 0.0f)
+		{
+		float FillRounding = std::min(InnerRounding, FillW * 0.5f);
+		FillRounding = std::min(FillRounding, FillInset);
+			const bool RoundAll = Ratio >= 0.999f || FillW <= InnerRounding * 2.0f;
+			const int Corners = RoundAll ? IGraphics::CORNER_ALL : IGraphics::CORNER_L;
+			const ColorRGBA Col = color_cast<ColorRGBA>(ColorHSLA(g_Config.m_ClMapProgressColor));
+			Graphics()->DrawRect(PosX + FillInset, PosY + FillInset, FillW, InnerH, Col, Corners, FillRounding);
+		}
 	}
 
 	{
