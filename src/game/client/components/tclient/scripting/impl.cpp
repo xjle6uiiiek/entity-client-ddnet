@@ -49,8 +49,8 @@ static const auto NAMESPACE_MATH = [](chaiscript::Namespace &Math) {
 	Math["ceil"] = chaiscript::var(chaiscript::fun([](double x) { return ceil(x); }));
 	Math["floor"] = chaiscript::var(chaiscript::fun([](double x) { return floor(x); }));
 	Math["round"] = chaiscript::var(chaiscript::fun([](double x) { return round(x); }));
-	Math["abs"] = chaiscript::var(chaiscript::fun([](double x) { return fabs(x); }));
-	Math["abs"] = chaiscript::var(chaiscript::fun([](int x) { return fabs(x); }));
+	Math["abs"] = chaiscript::var(chaiscript::fun([](double x) { return std::fabs(x); }));
+	Math["abs"] = chaiscript::var(chaiscript::fun([](int x) { return std::fabs(x); }));
 	// <E-Client
 	Math["clamp"] = chaiscript::var(chaiscript::fun([](double Val, double Min, double Max) { return std::clamp(Val, Min, Max); }));
 	Math["clamp"] = chaiscript::var(chaiscript::fun([](int Val, int Min, int Max) { return std::clamp(Val, Min, Max); }));

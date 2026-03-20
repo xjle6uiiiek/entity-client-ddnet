@@ -1527,20 +1527,18 @@ bool CChat::ChatDetection(int ClientId, int Team, const char *pLine)
 					const char *pOldName = str_find_nocase(pLine, "'");
 					const char *pNameLength = str_find_nocase(pLine, "' ");
 
-					int Length = str_length(pName);
-					std::string sNewName(pName);
-					sNewName.erase(sNewName.begin() + Length - 1);
-					sNewName.erase(sNewName.begin());
-					sNewName.erase(sNewName.begin());
+					std::string NewName(pName);
+					NewName.erase(NewName.begin() + str_length(pName) - 1);
+					NewName.erase(NewName.begin());
+					NewName.erase(NewName.begin());
 
-					str_copy(aNewName, sNewName.c_str(), sizeof(aNewName));
+					str_copy(aNewName, NewName.c_str(), sizeof(aNewName));
 
-					int nLength = str_length(pOldName) - str_length(pNameLength);
-					std::string sOldName(pOldName);
-					sOldName.erase(nLength);
-					sOldName.erase(sOldName.begin());
+					std::string OldName(pOldName);
+					OldName.erase(str_length(pOldName) - str_length(pNameLength));
+					OldName.erase(OldName.begin());
 
-					str_copy(aOldName, sOldName.c_str(), sizeof(aOldName));
+					str_copy(aOldName, OldName.c_str(), sizeof(aOldName));
 				}
 
 				int PlayerCid = GameClient()->GetClientId(aOldName);
@@ -1600,13 +1598,13 @@ bool CChat::ChatDetection(int ClientId, int Team, const char *pLine)
 				const char *NameLength = str_find_nocase(pLine, "' ");
 				if(str_find_nocase(pLine, g_Config.m_ClAutoJoinTeamName))
 				{
-					int nLength = str_length(PName) - str_length(NameLength);
+					int Length = str_length(PName) - str_length(NameLength);
 					std::string Name(PName);
-					Name.erase(nLength);
+					Name.erase(Length);
 					Name.erase(Name.begin());
 
 					char PlayerName[16];
-					strcpy(PlayerName, Name.c_str());
+					str_copy(PlayerName, Name.c_str(), sizeof(PlayerName));
 					if(!str_comp(g_Config.m_ClAutoJoinTeamName, PlayerName))
 					{
 						char aBuf[2048] = "/Join ";
@@ -1631,13 +1629,13 @@ bool CChat::ChatDetection(int ClientId, int Team, const char *pLine)
 					const char *NameLength = str_find_nocase(pLine, "' ");
 					if(str_find_nocase(pLine, g_Config.m_ClAutoNotifyName))
 					{
-						int nLength = str_length(PName) - str_length(NameLength);
+						int Length = str_length(PName) - str_length(NameLength);
 						std::string Name(PName);
-						Name.erase(nLength);
+						Name.erase(Length);
 						Name.erase(Name.begin());
 
 						char PlayerName[16];
-						strcpy(PlayerName, Name.c_str());
+						str_copy(PlayerName, Name.c_str(), sizeof(PlayerName));
 
 						int NameToJoin = str_comp(g_Config.m_ClAutoNotifyName, PlayerName);
 						if(NameToJoin == 0)

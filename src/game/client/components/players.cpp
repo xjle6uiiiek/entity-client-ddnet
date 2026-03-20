@@ -1389,7 +1389,7 @@ void CPlayers::RenderEffects(bool Frozen, bool Local, vec2 BodyPos, vec2 Vel, fl
 		{
 			GameClient()->m_Effects.SparkleEffect(BodyPos, Alpha);
 		}
-		else if(g_Config.m_ClEffect == EFFECT_FIRETRAIL && (abs(Vel.x) > 0.15f || abs(Vel.y) > 0.15f))
+		else if(g_Config.m_ClEffect == EFFECT_FIRETRAIL && (std::abs(Vel.x) > 0.15f || std::abs(Vel.y) > 0.15f))
 		{
 			GameClient()->m_Effects.FireTrailEffect(BodyPos, Alpha);
 		}

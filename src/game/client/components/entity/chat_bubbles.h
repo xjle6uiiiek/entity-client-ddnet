@@ -61,7 +61,7 @@ class CChatBubbles : public CComponent
 	void UpdateBubbleOffsets(int ClientId, float InputBubbleHeight = 0.0f);
 
 	void AddBubble(int ClientId, int Team, const char *pText);
-	void RemoveBubble(int ClientId, CBubble Bubble);
+	void RemoveBubble(int ClientId, const CBubble &Bubble);
 
 	void ShiftBubbles();
 

@@ -1006,38 +1006,38 @@ void CNamePlates::RenderNamePlatePreview(vec2 Position, int Dummy)
 
 	if(s_SwitchDelay < time_get() && g_Config.m_ClWarList)
 	{
-		static int Type = 1;
+		static int s_Type = 1;
 		int Amount = GameClient()->m_WarList.m_WarTypes.size();
 
-		if(Type < Amount)
+		if(s_Type < Amount)
 		{
-			s_Color = GameClient()->m_WarList.m_WarTypes[Type]->m_Color;
-			str_copy(s_Reason, GameClient()->m_WarList.m_WarTypes[Type]->m_aWarName);
+			s_Color = GameClient()->m_WarList.m_WarTypes[s_Type]->m_Color;
+			str_copy(s_Reason, GameClient()->m_WarList.m_WarTypes[s_Type]->m_aWarName);
 		}
 		else
 		{
 			int RandomTeam = round_to_int(random_float(1.0f, 32.0f));
 			s_Color = g_Config.m_ClNamePlatesTeamcolors ? GameClient()->GetDDTeamColor(RandomTeam, 0.75f) : TextRender()->DefaultTextColor();
 			str_format(s_Reason, sizeof(s_Reason), "In Team %d", RandomTeam);
-			if(Type == Amount + 1)
+			if(s_Type == Amount + 1)
 			{
 				str_copy(s_Reason, "Friend");
 				s_Color = color_cast<ColorRGBA>(ColorHSLA(g_Config.m_ClFriendColor));
-				Type = 1;
+				s_Type = 1;
 			}
 		}
-		Type++;
+		s_Type++;
 		s_SwitchDelay = time_get() + time_freq() * 1.5f;
 	}
 	else if(s_SwitchDelay < time_get())
 	{
-		static int Count = 1;
+		static int s_Count = 1;
 
-		s_Color = g_Config.m_ClNamePlatesTeamcolors ? GameClient()->GetDDTeamColor(Count, 0.75f) : TextRender()->DefaultTextColor();
-		str_format(s_Reason, sizeof(s_Reason), "In Team %d", Count);
-		Count++;
-		if(Count > 63)
-			Count = 1;
+		s_Color = g_Config.m_ClNamePlatesTeamcolors ? GameClient()->GetDDTeamColor(s_Count, 0.75f) : TextRender()->DefaultTextColor();
+		str_format(s_Reason, sizeof(s_Reason), "In Team %d", s_Count);
+		s_Count++;
+		if(s_Count > 63)
+			s_Count = 1;
 
 		s_SwitchDelay = time_get() + time_freq() * 0.5f;
 	}

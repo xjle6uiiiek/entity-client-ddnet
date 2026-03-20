@@ -11,7 +11,7 @@
 #include <cmath>
 
 template<typename T>
-T color_lerp(T a, T b, float c)
+T static color_lerp(T a, T b, float c)
 {
 	T Result;
 	for(size_t i = 0; i < 4; ++i)

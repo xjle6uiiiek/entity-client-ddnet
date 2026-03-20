@@ -498,7 +498,7 @@ void CWarList::RemoveWarType(const char *pType)
 	CWarType Type(pType);
 
 	auto It = std::find_if(m_WarTypes.begin(), m_WarTypes.end(),
-		[&Type](CWarType *warTypePtr) { return *warTypePtr == Type; });
+		[&Type](CWarType *WarTypePtr) { return *WarTypePtr == Type; });
 	if(It != m_WarTypes.end())
 	{
 		// Don't remove default war types
@@ -562,7 +562,7 @@ CWarType *CWarList::FindWarType(const char *pType)
 {
 	CWarType Type(pType);
 	auto It = std::find_if(m_WarTypes.begin(), m_WarTypes.end(),
-		[&Type](CWarType *warTypePtr) { return *warTypePtr == Type; });
+		[&Type](CWarType *WarTypePtr) { return *WarTypePtr == Type; });
 	if(It != m_WarTypes.end())
 		return *It;
 	else
