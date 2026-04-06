@@ -381,6 +381,8 @@ MACRO_CONFIG_INT(ClMapOverviewOpacity, ec_map_overview_opacity, 15, 0, 100, CFGF
 // Map Progress
 MACRO_CONFIG_INT(ClMapProgress, ec_map_progress, 0, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Show map progress bar")
 MACRO_CONFIG_INT(ClMapProgressDebug, ec_map_progress_debug, 0, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Show map progress debug path")
+MACRO_CONFIG_INT(ClMapProgressDisplay, ec_map_progress_display, 2, 0, 2, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Map progress display mode (0 = bar, 1 = percent, 2 = both)")
+MACRO_CONFIG_INT(ClMapProgressVertical, ec_map_progress_vertical, 0, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Show map progress bar vertically")
 MACRO_CONFIG_INT(ClMapProgressX, ec_map_progress_x, 50, 0, 100, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Map progress bar X position in percent")
 MACRO_CONFIG_INT(ClMapProgressY, ec_map_progress_y, 85, 0, 100, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Map progress bar Y position in percent")
 MACRO_CONFIG_INT(ClMapProgressWidth, ec_map_progress_width, 120, 20, 400, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Map progress bar width")

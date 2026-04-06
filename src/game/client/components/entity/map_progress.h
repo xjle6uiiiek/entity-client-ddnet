@@ -37,6 +37,8 @@ private:
 	bool m_HasGoal = false;
 	bool m_PathValid = false;
 	bool m_PathAttempted = false;
+	bool m_PathInitialized = false;
+	bool m_CandidatesCollected = false;
 	float m_TotalLength = 0.0f;
 };
 

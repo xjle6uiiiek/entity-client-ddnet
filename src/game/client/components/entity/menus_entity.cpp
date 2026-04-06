@@ -2857,7 +2857,7 @@ void CMenus::RenderSettingsVisual(CUIRect MainView)
 
 	// left side in settings menu
 	CUIRect Cosmetics, Trails, PhysicBalls, ServerRainbow, TileOutlines,
-		Miscellaneous, MapOverview, DiscordRpc, ChatBubbles, PlayerIndicator, BgDraw, SweatMode;
+		Miscellaneous, MapProgress, MapOverview, DiscordRpc, ChatBubbles, PlayerIndicator, BgDraw, SweatMode;
 	MainView.VSplitMid(&Cosmetics, &Miscellaneous);
 
 	/* Cosmetics */
@@ -3460,7 +3460,7 @@ void CMenus::RenderSettingsVisual(CUIRect MainView)
 			Size += LineSize;
 
 		Miscellaneous.VMargin(5.0f, &Miscellaneous);
-		Miscellaneous.HSplitTop(Size, &Miscellaneous, &MapOverview);
+		Miscellaneous.HSplitTop(Size, &Miscellaneous, &MapProgress);
 		if(s_ScrollRegion.AddRect(Miscellaneous))
 		{
 			Miscellaneous.Draw(BackgroundColor, IGraphics::CORNER_ALL, CornerRoundness);
@@ -3556,6 +3556,65 @@ void CMenus::RenderSettingsVisual(CUIRect MainView)
 				Miscellaneous.HSplitTop(5.0f, &Button, &Miscellaneous);
 				Miscellaneous.HSplitTop(LineSize, &Button, &Miscellaneous);
 				Ui()->DoScrollbarOption(&g_Config.m_ClCursorOpacitySpec, &g_Config.m_ClCursorOpacitySpec, &Button, Localize("Cursor Opacity in Spec"), 0, 100, &CUi::ms_LinearScrollbarScale, 0u, "");
+			}
+		}
+	}
+
+	/* Map Progress */
+	{
+		MapProgress.HSplitTop(Margin, nullptr, &MapProgress);
+		MapProgress.HSplitTop(250.0f, &MapProgress, &MapOverview);
+		if(s_ScrollRegion.AddRect(MapProgress))
+		{
+			MapProgress.Draw(BackgroundColor, IGraphics::CORNER_ALL, CornerRoundness);
+			MapProgress.VMargin(Margin, &MapProgress);
+
+			MapProgress.HSplitTop(HeaderHeight, &Button, &MapProgress);
+			Ui()->DoLabel(&Button, Localize("Map Progress"), HeaderSize, HeaderAlignment);
+			{
+				DoButton_CheckBoxAutoVMarginAndSet(&g_Config.m_ClMapProgress, Localize("Show map progress bar"), &g_Config.m_ClMapProgress, &MapProgress, LineSize);
+				DoButton_CheckBoxAutoVMarginAndSet(&g_Config.m_ClMapProgressDebug, Localize("Show debug path"), &g_Config.m_ClMapProgressDebug, &MapProgress, LineSize);
+
+				static std::vector<const char *> s_MapProgressDisplayNames;
+				s_MapProgressDisplayNames = {Localize("Bar"), Localize("Percent"), Localize("Bar + Percent")};
+				static CUi::SDropDownState s_MapProgressDisplayDropDownState;
+				static CScrollRegion s_MapProgressDisplayDropDownScrollRegion;
+				s_MapProgressDisplayDropDownState.m_SelectionPopupContext.m_pScrollRegion = &s_MapProgressDisplayDropDownScrollRegion;
+
+				const int DisplaySelectedOld = std::clamp(g_Config.m_ClMapProgressDisplay, 0, 2);
+				CUIRect DisplayDropDownRect;
+				MapProgress.HSplitTop(LineSize, &DisplayDropDownRect, &MapProgress);
+
+				const float DisplayLabelWidth = TextRender()->TextBoundingBox(FontSize, Localize("Display:")).m_W + 3.5f;
+				DisplayDropDownRect.VSplitLeft(DisplayLabelWidth, &Label, &DisplayDropDownRect);
+				DisplayDropDownRect.VSplitRight(MarginSmall, &DisplayDropDownRect, nullptr);
+
+				Ui()->DoLabel(&Label, Localize("Display:"), FontSize, TEXTALIGN_ML);
+				const int DisplaySelectedNew = Ui()->DoDropDown(&DisplayDropDownRect, DisplaySelectedOld, s_MapProgressDisplayNames.data(), s_MapProgressDisplayNames.size(), s_MapProgressDisplayDropDownState);
+				Ui()->UpdatePopupMenuOffset(&s_MapProgressDisplayDropDownState.m_SelectionPopupContext, DisplayDropDownRect.x, DisplayDropDownRect.y);
+
+				if(s_ScrollRegion.ClipRect())
+				{
+					const float PosY = DisplayDropDownRect.y + 20.0f;
+					if(PosY < s_ScrollRegion.ClipRect()->y || PosY > (s_ScrollRegion.ClipRect()->y + s_ScrollRegion.ClipRect()->h))
+						Ui()->ClosePopupMenu(&s_MapProgressDisplayDropDownState.m_SelectionPopupContext);
+				}
+
+				if(DisplaySelectedOld != DisplaySelectedNew)
+					g_Config.m_ClMapProgressDisplay = DisplaySelectedNew;
+
+				DoButton_CheckBoxAutoVMarginAndSet(&g_Config.m_ClMapProgressVertical, Localize("Vertical bar"), &g_Config.m_ClMapProgressVertical, &MapProgress, LineSize);
+
+				MapProgress.HSplitTop(LineSize, &Button, &MapProgress);
+				Ui()->DoScrollbarOption(&g_Config.m_ClMapProgressWidth, &g_Config.m_ClMapProgressWidth, &Button, Localize("Bar width"), 20, 400);
+				MapProgress.HSplitTop(LineSize, &Button, &MapProgress);
+				Ui()->DoScrollbarOption(&g_Config.m_ClMapProgressHeight, &g_Config.m_ClMapProgressHeight, &Button, Localize("Bar height"), 2, 30);
+				MapProgress.HSplitTop(LineSize, &Button, &MapProgress);
+				Ui()->DoScrollbarOption(&g_Config.m_ClMapProgressX, &g_Config.m_ClMapProgressX, &Button, Localize("Horizontal position"), 0, 100, &CUi::ms_LinearScrollbarScale, 0u, "%");
+				MapProgress.HSplitTop(LineSize, &Button, &MapProgress);
+				Ui()->DoScrollbarOption(&g_Config.m_ClMapProgressY, &g_Config.m_ClMapProgressY, &Button, Localize("Vertical position"), 0, 100, &CUi::ms_LinearScrollbarScale, 0u, "%");
+				static CButtonContainer s_MapProgressColor;
+				DoLine_ColorPicker(&s_MapProgressColor, ColorPickerLineSize, ColorPickerLabelSize, ColorPickerLineSpacing, &MapProgress, Localize("Bar color"), &g_Config.m_ClMapProgressColor, color_cast<ColorRGBA, ColorHSLA>(ColorHSLA(DefaultConfig::ClMapProgressColor)), false);
 			}
 		}
 	}

@@ -14,6 +14,27 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <numeric>
+
+namespace
+{
+enum
+{
+	MAP_PROGRESS_DISPLAY_BAR = 0,
+	MAP_PROGRESS_DISPLAY_PERCENT,
+	MAP_PROGRESS_DISPLAY_BOTH,
+};
+
+bool MapProgressShowBar(int DisplayMode)
+{
+	return DisplayMode != MAP_PROGRESS_DISPLAY_PERCENT;
+}
+
+bool MapProgressShowPercent(int DisplayMode)
+{
+	return DisplayMode != MAP_PROGRESS_DISPLAY_BAR;
+}
+}
 
 void CMapProgress::ResetState()
 {
@@ -23,6 +44,8 @@ void CMapProgress::ResetState()
 	m_HasGoal = false;
 	m_PathValid = false;
 	m_PathAttempted = false;
+	m_PathInitialized = false;
+	m_CandidatesCollected = false;
 	m_TotalLength = 0.0f;
 	m_StartPos = vec2(0.0f, 0.0f);
 	m_GoalPos = vec2(0.0f, 0.0f);
@@ -36,9 +59,6 @@ void CMapProgress::OnMapLoad()
 
 	if(!Collision())
 		return;
-
-	m_Path.Init(Collision(), 5);
-	CollectTileCandidates();
 }
 
 void CMapProgress::OnReset()
@@ -136,37 +156,103 @@ bool CMapProgress::BuildPathIfNeeded(const vec2 &Pos)
 	if(m_PathAttempted)
 		return false;
 
-	if(!m_Path.IsInitialized())
+	if(!m_PathInitialized)
+	{
+		if(!Collision())
+			return false;
+
+		m_Path.Init(Collision(), 5);
+		m_PathInitialized = m_Path.IsInitialized();
+	}
+
+	if(!m_PathInitialized)
 		return false;
+
+	if(!m_CandidatesCollected)
+	{
+		CollectTileCandidates();
+		m_CandidatesCollected = true;
+	}
 
 	if(m_vStartCandidates.empty() || m_vFinishCandidates.empty())
 		return false;
 
-	if(!m_HasStart)
-	{
-		m_StartPos = FindNearest(m_vStartCandidates, Pos);
-		m_HasStart = m_StartPos.x >= 0.0f && m_StartPos.y >= 0.0f;
-	}
+	std::vector<int> vStartOrder(m_vStartCandidates.size());
+	std::iota(vStartOrder.begin(), vStartOrder.end(), 0);
+	std::stable_sort(vStartOrder.begin(), vStartOrder.end(), [&](int Left, int Right) {
+		return distance(m_vStartCandidates[Left], Pos) < distance(m_vStartCandidates[Right], Pos);
+	});
 
-	if(!m_HasGoal && m_HasStart)
-	{
-		m_GoalPos = FindNearest(m_vFinishCandidates, m_StartPos);
-		m_HasGoal = m_GoalPos.x >= 0.0f && m_GoalPos.y >= 0.0f;
-	}
+	auto TryBuild = [&](bool AllowFreeze) {
+		std::vector<vec2> vBestPath;
+		std::vector<unsigned char> vBestTele;
+		vec2 BestStart(-1.0f, -1.0f);
+		vec2 BestGoal(-1.0f, -1.0f);
+		float BestLength = std::numeric_limits<float>::infinity();
+		int BestTeleCount = std::numeric_limits<int>::max();
+		bool Found = false;
 
-	if(!m_HasStart || !m_HasGoal)
-		return false;
-
-	if(!m_Path.BuildPath(m_StartPos, m_GoalPos, m_vPath, m_vPathTele, false))
-	{
-		if(!m_Path.BuildPath(m_StartPos, m_GoalPos, m_vPath, m_vPathTele, true))
+		for(int StartIndex : vStartOrder)
 		{
-			m_PathAttempted = true;
-			return false;
+			const vec2 &StartCandidate = m_vStartCandidates[StartIndex];
+
+			std::vector<int> vFinishOrder(m_vFinishCandidates.size());
+			std::iota(vFinishOrder.begin(), vFinishOrder.end(), 0);
+			std::stable_sort(vFinishOrder.begin(), vFinishOrder.end(), [&](int Left, int Right) {
+				return distance(m_vFinishCandidates[Left], StartCandidate) < distance(m_vFinishCandidates[Right], StartCandidate);
+			});
+
+			for(int FinishIndex : vFinishOrder)
+			{
+				const vec2 &FinishCandidate = m_vFinishCandidates[FinishIndex];
+
+				std::vector<vec2> vCandidatePath;
+				std::vector<unsigned char> vCandidateTele;
+				if(!m_Path.BuildPath(StartCandidate, FinishCandidate, vCandidatePath, vCandidateTele, AllowFreeze))
+					continue;
+
+				const float Length = PathLength(vCandidatePath, vCandidateTele);
+				if(Length <= 0.001f)
+					continue;
+
+				const int TeleCount = (int)std::count(vCandidateTele.begin(), vCandidateTele.end(), (unsigned char)1);
+				const bool Better =
+					!Found ||
+					Length < BestLength - 0.001f ||
+					(std::abs(Length - BestLength) <= 0.001f && TeleCount < BestTeleCount);
+
+				if(!Better)
+					continue;
+
+				Found = true;
+				BestLength = Length;
+				BestTeleCount = TeleCount;
+				BestStart = StartCandidate;
+				BestGoal = FinishCandidate;
+				vBestPath = std::move(vCandidatePath);
+				vBestTele = std::move(vCandidateTele);
+			}
 		}
+
+		if(!Found)
+			return false;
+
+		m_StartPos = BestStart;
+		m_GoalPos = BestGoal;
+		m_vPath = std::move(vBestPath);
+		m_vPathTele = std::move(vBestTele);
+		m_TotalLength = BestLength;
+		m_HasStart = true;
+		m_HasGoal = true;
+		return true;
+	};
+
+	if(!TryBuild(false) && !TryBuild(true))
+	{
+		m_PathAttempted = true;
+		return false;
 	}
 
-	m_TotalLength = PathLength(m_vPath, m_vPathTele);
 	m_PathValid = m_TotalLength > 0.001f;
 	m_PathAttempted = true;
 	if(!m_PathValid)
@@ -247,52 +333,85 @@ void CMapProgress::OnRender()
 		return;
 
 	const float Ratio = std::clamp(Progress / m_TotalLength, 0.0f, 1.0f);
+	const int DisplayMode = std::clamp<int>(g_Config.m_ClMapProgressDisplay, MAP_PROGRESS_DISPLAY_BAR, MAP_PROGRESS_DISPLAY_BOTH);
+	const bool ShowBar = MapProgressShowBar(DisplayMode);
+	const bool ShowPercent = MapProgressShowPercent(DisplayMode);
+	const bool Vertical = g_Config.m_ClMapProgressVertical != 0;
 
 	const float ScreenW = 300.0f * Graphics()->ScreenAspect();
 	const float ScreenH = 300.0f;
 	Graphics()->MapScreen(0.0f, 0.0f, ScreenW, ScreenH);
 
-	const float BarW = std::clamp((float)g_Config.m_ClMapProgressWidth, 1.0f, ScreenW);
-	const float BarH = std::clamp((float)g_Config.m_ClMapProgressHeight, 1.0f, ScreenH);
+	const float BaseBarW = std::clamp((float)g_Config.m_ClMapProgressWidth, 1.0f, ScreenW);
+	const float BaseBarH = std::clamp((float)g_Config.m_ClMapProgressHeight, 1.0f, ScreenH);
+	const float BarW = Vertical ? std::min(BaseBarH, ScreenW) : BaseBarW;
+	const float BarH = Vertical ? std::min(BaseBarW, ScreenH) : BaseBarH;
 	const float PosXPct = std::clamp((float)g_Config.m_ClMapProgressX / 100.0f, 0.0f, 1.0f);
 	const float PosYPct = std::clamp((float)g_Config.m_ClMapProgressY / 100.0f, 0.0f, 1.0f);
 	const float PosX = (ScreenW - BarW) * PosXPct;
 	const float PosY = (ScreenH - BarH) * PosYPct;
+	const float MinorAxis = Vertical ? BarW : BarH;
+	const float Rounding = std::min(std::clamp(MinorAxis * 0.35f, 2.0f, 6.0f), std::min(BarW, BarH) * 0.5f);
 
-	const float Rounding = std::min(std::clamp(BarH * 0.35f, 2.0f, 6.0f), BarW * 0.5f);
-
-	Graphics()->DrawRect(PosX, PosY, BarW, BarH, ColorRGBA(0.0f, 0.0f, 0.0f, 0.35f), IGraphics::CORNER_ALL, Rounding);
-
-	if(Ratio > 0.0f)
+	if(ShowBar)
 	{
-		const float FillInset = std::min(BarH * 0.15f, 1.0f);
-		const float InnerW = std::max(0.0f, BarW - FillInset * 2.0f);
-		const float InnerH = std::max(0.0f, BarH - FillInset * 2.0f);
-		const float InnerRounding = std::max(0.0f, Rounding - FillInset);
-		const float FillW = InnerW * Ratio;
-		if(FillW > 0.0f && InnerH > 0.0f)
+		Graphics()->DrawRect(PosX, PosY, BarW, BarH, ColorRGBA(0.0f, 0.0f, 0.0f, 0.35f), IGraphics::CORNER_ALL, Rounding);
+
+		if(Ratio > 0.0f)
 		{
-		float FillRounding = std::min(InnerRounding, FillW * 0.5f);
-		FillRounding = std::min(FillRounding, FillInset);
-			const bool RoundAll = Ratio >= 0.999f || FillW <= InnerRounding * 2.0f;
-			const int Corners = RoundAll ? IGraphics::CORNER_ALL : IGraphics::CORNER_L;
-			const ColorRGBA Col = color_cast<ColorRGBA>(ColorHSLA(g_Config.m_ClMapProgressColor));
-			Graphics()->DrawRect(PosX + FillInset, PosY + FillInset, FillW, InnerH, Col, Corners, FillRounding);
+			const float FillInset = std::min(1.0f, MinorAxis * 0.18f);
+			const float InnerW = std::max(0.0f, BarW - FillInset * 2.0f);
+			const float InnerH = std::max(0.0f, BarH - FillInset * 2.0f);
+			const float InnerRounding = std::min(std::max(0.0f, Rounding - FillInset), std::min(InnerW, InnerH) * 0.5f);
+			const float FillPrimary = (Vertical ? InnerH : InnerW) * Ratio;
+
+			if(FillPrimary > 0.0f && InnerW > 0.0f && InnerH > 0.0f)
+			{
+				const float FillRounding = std::min(InnerRounding, std::min(Vertical ? InnerW : FillPrimary, Vertical ? FillPrimary : InnerH) * 0.5f);
+				const bool RoundAll = Ratio >= 0.999f || FillPrimary <= InnerRounding * 2.0f;
+				const int Corners = RoundAll ? IGraphics::CORNER_ALL : (Vertical ? IGraphics::CORNER_B : IGraphics::CORNER_L);
+				const ColorRGBA Col = color_cast<ColorRGBA>(ColorHSLA(g_Config.m_ClMapProgressColor));
+
+				if(Vertical)
+					Graphics()->DrawRect(PosX + FillInset, PosY + FillInset + InnerH - FillPrimary, InnerW, FillPrimary, Col, Corners, FillRounding);
+				else
+					Graphics()->DrawRect(PosX + FillInset, PosY + FillInset, FillPrimary, InnerH, Col, Corners, FillRounding);
+			}
 		}
 	}
+
+	if(!ShowPercent)
+		return;
 
 	{
 		char aBuf[16];
 		const int Percent = (int)std::round(Ratio * 100.0f);
 		str_format(aBuf, sizeof(aBuf), "%d%%", Percent);
 
-		const float FontSize = std::clamp(BarH * 0.9f, 5.0f, 12.0f);
+		const float FontSize = std::clamp((ShowBar ? MinorAxis : std::min(BarW, BarH)) * 0.9f, 5.0f, 12.0f);
 		const float TextWidth = TextRender()->TextWidth(FontSize, aBuf, -1, -1.0f);
 
-		float TextX = PosX + BarW + 4.0f;
-		if(TextX + TextWidth > ScreenW)
-			TextX = std::max(0.0f, PosX - 4.0f - TextWidth);
-		const float TextY = PosY + (BarH - FontSize) * 0.5f;
+		float TextX = PosX;
+		float TextY = PosY;
+		if(!ShowBar)
+		{
+			TextX = PosX + (BarW - TextWidth) * 0.5f;
+			TextY = PosY + (BarH - FontSize) * 0.5f;
+		}
+		else if(Vertical)
+		{
+			TextX = std::clamp(PosX + (BarW - TextWidth) * 0.5f, 0.0f, std::max(0.0f, ScreenW - TextWidth));
+			TextY = PosY - FontSize - 4.0f;
+			if(TextY < 0.0f)
+				TextY = std::min(ScreenH - FontSize, PosY + BarH + 4.0f);
+		}
+		else
+		{
+			TextX = PosX + BarW + 4.0f;
+			if(TextX + TextWidth > ScreenW)
+				TextX = std::max(0.0f, PosX - 4.0f - TextWidth);
+			TextY = PosY + (BarH - FontSize) * 0.5f;
+		}
 
 		TextRender()->TextColor(1.0f, 1.0f, 1.0f, 1.0f);
 		TextRender()->Text(TextX, TextY, FontSize, aBuf, -1.0f);
