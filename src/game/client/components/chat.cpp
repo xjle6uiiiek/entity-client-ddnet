@@ -3,32 +3,50 @@
 
 #include "chat.h"
 
-#include "entity/entity.h"
 #include "tclient/bindchat.h"
 #include "tclient/warlist.h"
 
+#include <base/color.h>
 #include <base/io.h>
+#include <base/math.h>
+#include <base/str.h>
+#include <base/system.h>
 #include <base/time.h>
+#include <base/types.h>
+#include <base/vmath.h>
 
+#include <engine/client.h>
 #include <engine/client/client.h>
+#include <engine/console.h>
 #include <engine/editor.h>
 #include <engine/graphics.h>
+#include <engine/input.h>
 #include <engine/keys.h>
 #include <engine/shared/config.h>
 #include <engine/shared/csv.h>
+#include <engine/shared/protocol.h>
+#include <engine/shared/video.h>
+#include <engine/storage.h>
 #include <engine/textrender.h>
 
 #include <generated/protocol.h>
 #include <generated/protocol7.h>
 
 #include <game/client/animstate.h>
-#include <game/client/components/censor.h>
 #include <game/client/components/scoreboard.h>
-#include <game/client/components/skins.h>
 #include <game/client/components/sounds.h>
 #include <game/client/gameclient.h>
+#include <game/client/lineinput.h>
+#include <game/client/render.h>
+#include <game/client/ui_rect.h>
 #include <game/localization.h>
+#include <game/teamscore.h>
 
+#include <algorithm>
+#include <cstdint>
+#include <optional>
+#include <ranges>
+#include <string>
 #include <vector>
 
 char CChat::ms_aDisplayText[MAX_LINE_LENGTH] = "";
@@ -37,6 +55,7 @@ CChat::CLine::CLine()
 {
 	m_TextContainerIndex.Reset();
 	m_QuadContainerIndex = -1;
+	m_RenderedOffsetType = -1;
 }
 
 void CChat::CLine::Reset(CChat &This)
@@ -51,19 +70,37 @@ void CChat::CLine::Reset(CChat &This)
 	m_TimesRepeated = 0;
 	m_pManagedTeeRenderInfo = nullptr;
 
-	m_Paused = false; // E-Client
+	// EClient
+	m_pTranslateResponse = nullptr;
+	m_Paused = false; // EClient
+	m_RenderedOffsetType = -1;
+
+	// Selection text
+	m_RenderedName.clear();
+	m_RenderedText.clear();
 }
 
 CChat::CChat()
 {
 	m_Mode = MODE_NONE;
+	m_BacklogCurLine = 0;
+	m_LinesRendered = 0;
+
+	// Selection state initialization
+	m_Selecting = false;
+	m_SelectionMousePress = vec2(0.0f, 0.0f);
+	m_SelectionMouseRelease = vec2(0.0f, 0.0f);
+	m_HasSelection = false;
+	m_SelectionText.clear();
+	m_NewLineCounter = 0;
+	m_SelectorMouse = vec2(-1.0f, -1.0f);
 
 	m_Input.SetClipboardLineCallback([this](const char *pStr) {
 		if(Client()->m_FoxNetVersion != 0 && Client()->RconAuthed())
 		{
-			if(Client()->m_FoxNetVersion != 0 && Client()->RconAuthed())
+			if(Client()->m_FoxNetVersion != 0 && pStr[0] && Client()->RconAuthed())
 			{
-				SendChat(TEAM_FLOCK, pStr);
+				SendChat(m_Mode == MODE_ALL ? 0 : 1, pStr);
 				AddHistoryEntry(pStr);
 			}
 		}
@@ -129,6 +166,7 @@ void CChat::RebuildChat()
 			continue;
 		TextRender()->DeleteTextContainer(Line.m_TextContainerIndex);
 		Graphics()->DeleteQuadContainer(Line.m_QuadContainerIndex);
+		Line.m_RenderedOffsetType = -1;
 		// recalculate sizes
 		Line.m_aYOffset[0] = -1.0f;
 		Line.m_aYOffset[1] = -1.0f;
@@ -141,6 +179,8 @@ void CChat::ClearLines()
 		Line.Reset(*this);
 	m_PrevScoreBoardShowed = false;
 	m_PrevShowChat = false;
+	m_BacklogCurLine = 0;
+	m_LinesRendered = 0;
 }
 
 void CChat::OnWindowResize()
@@ -167,8 +207,20 @@ void CChat::Reset()
 	m_ServerSupportsCommandInfo = false;
 	m_ServerCommandsNeedSorting = false;
 	m_aCurrentInputText[0] = '\0';
+	m_BacklogCurLine = 0;
+	m_LinesRendered = 0;
 	DisableMode();
 	m_vServerCommands.clear();
+	GameClient()->m_Bindchat.CacheChatCommands();
+	GameClient()->m_Bindchat.SortChatBinds();
+
+	// Reset selection state
+	m_Selecting = false;
+	m_SelectionMousePress = vec2(0.0f, 0.0f);
+	m_SelectionMouseRelease = vec2(0.0f, 0.0f);
+	m_HasSelection = false;
+	m_SelectionText.clear();
+	m_NewLineCounter = 0;
 
 	for(int64_t &LastSoundPlayed : m_aLastSoundPlayed)
 		LastSoundPlayed = 0;
@@ -268,8 +320,8 @@ void CChat::OnConsoleInit()
 	Console()->Register("message", "r[message]", CFGFLAG_CLIENT | CFGFLAG_STORE, ConClientMessage, this, "Echo the text in chat window");
 	Console()->Register("clear_chat", "", CFGFLAG_CLIENT | CFGFLAG_STORE, ConClearChat, this, "Clear chat messages");
 
-	Console()->Register("set_input", "r[input]", CFGFLAG_CLIENT, ConSetChatInput, this, "Opens chat and sets the input as the message"); // E-Client [Quick Actions]
-	Console()->Register("say_queued", "r[message]", CFGFLAG_CLIENT, ConSayQueued, this, "Say in queue chat"); // E-Client
+	Console()->Register("set_input", "r[input]", CFGFLAG_CLIENT, ConSetChatInput, this, "Opens chat and sets the input as the message"); // EClient [Quick Actions]
+	Console()->Register("say_queued", "r[message]", CFGFLAG_CLIENT, ConSayQueued, this, "Say in queue chat"); // EClient
 }
 
 void CChat::OnInit()
@@ -280,10 +332,75 @@ void CChat::OnInit()
 	Console()->Chain("cl_chat_width", ConchainChatWidth, this);
 }
 
+bool CChat::OnCursorMove(float x, float y, IInput::ECursorType CursorType)
+{
+	if(m_Mode == MODE_NONE)
+		return false;
+
+	Ui()->ConvertMouseMove(&x, &y, CursorType);
+	m_SelectorMouse += vec2(x, y);
+
+	m_SelectorMouse.x = std::clamp(m_SelectorMouse.x, 0.0f, (float)Graphics()->WindowWidth() - 1.0f);
+	m_SelectorMouse.y = std::clamp(m_SelectorMouse.y, 0.0f, (float)Graphics()->WindowHeight() - 1.0f);
+
+	return true;
+}
+
+int CChat::GetLinesToScroll(int Direction, int LinesToScroll) const
+{
+	const int RenderableLines = NumInitializedLines();
+
+	int LinesToSkip = Direction == -1 ? m_BacklogCurLine + m_LinesRendered : m_BacklogCurLine - 1;
+	LinesToSkip = std::clamp(LinesToSkip, 0, RenderableLines);
+
+	int RemainingAbove = maximum(0, RenderableLines - LinesToSkip);
+	int Amount = Direction == -1 ? minimum(RemainingAbove, maximum(LinesToScroll, 0)) : minimum(m_BacklogCurLine, maximum(LinesToScroll, 0));
+	if(LinesToScroll <= 0)
+		Amount = Direction == -1 ? RemainingAbove : m_BacklogCurLine;
+	return maximum(0, Amount);
+}
+
+int CChat::NumInitializedLines() const
+{
+	int Count = 0;
+	for(int i = 0; i < MAX_LINES; i++)
+	{
+		const CLine &Line = m_aLines[((m_CurrentLine - i) + MAX_LINES) % MAX_LINES];
+		if(!Line.m_Initialized)
+			break;
+		Count++;
+	}
+	return Count;
+}
+
+void CChat::ScrollToTop()
+{
+	m_BacklogCurLine += GetLinesToScroll(-1, -1);
+}
+
+void CChat::ScrollToBottom()
+{
+	m_BacklogCurLine = 0;
+}
+
+void CChat::ScrollPageUp()
+{
+	m_BacklogCurLine += GetLinesToScroll(-1, maximum(1, m_LinesRendered));
+}
+
+void CChat::ScrollPageDown()
+{
+	m_BacklogCurLine -= GetLinesToScroll(1, maximum(1, m_LinesRendered));
+	if(m_BacklogCurLine < 0)
+		m_BacklogCurLine = 0;
+}
+
 bool CChat::OnInput(const IInput::CEvent &Event)
 {
 	if(m_Mode == MODE_NONE)
 		return false;
+
+	const int BacklogPrevLine = m_BacklogCurLine;
 
 	if(Event.m_Flags & IInput::FLAG_PRESS && Event.m_Key == KEY_ESCAPE)
 	{
@@ -300,7 +417,7 @@ bool CChat::OnInput(const IInput::CEvent &Event)
 		if(m_ServerCommandsNeedSorting)
 		{
 			std::sort(m_vServerCommands.begin(), m_vServerCommands.end());
-			GameClient()->m_Bindchat.SortChatBinds(); // E-Client
+			GameClient()->m_Bindchat.SortChatBinds(); // EClient
 			m_ServerCommandsNeedSorting = false;
 		}
 
@@ -310,7 +427,9 @@ bool CChat::OnInput(const IInput::CEvent &Event)
 		if(m_Mode == MODE_SILENT)
 			SilentMessage = true;
 
-		if(GameClient()->m_Bindchat.ChatDoBinds(m_Input.GetString()))
+		const char *pInput = m_Input.GetString();
+
+		if(GameClient()->m_Bindchat.ChatDoBinds(pInput))
 			SendMessage = false;
 
 		if(SendMessage)
@@ -318,21 +437,64 @@ bool CChat::OnInput(const IInput::CEvent &Event)
 			if(SilentMessage)
 			{
 				if(g_Config.m_ClSilentMessages)
-					AddLine(SILENT_MSG, TEAM_ALL, m_Input.GetString());
+					AddLine(SILENT_MSG, TEAM_ALL, pInput);
 			}
-			else if(Client()->m_FoxNetVersion != 0 && Client()->RconAuthed())
+			else if(Client()->m_FoxNetVersion != 0 && pInput[0] && Client()->RconAuthed())
 			{
-				SendChat(TEAM_FLOCK, m_Input.GetString());
-				AddHistoryEntry(m_Input.GetString());
+				SendChat(m_Mode == MODE_ALL ? 0 : 1, pInput);
+				AddHistoryEntry(pInput);
 			}
 			else
-				SendChatQueued(m_Input.GetString());
+				SendChatQueued(pInput);
 		}
 
 		m_pHistoryEntry = nullptr;
 		DisableMode();
 		GameClient()->OnRelease();
 		m_Input.Clear();
+	}
+	else if(Input()->ModifierIsPressed() && Event.m_Flags & IInput::FLAG_PRESS && Event.m_Key == KEY_C)
+	{
+		// Copy selection to clipboard
+		if(m_HasSelection && !m_SelectionText.empty())
+		{
+			Input()->SetClipboardText(m_SelectionText.c_str());
+			m_HasSelection = false;
+		}
+	}
+	else if(Event.m_Flags & IInput::FLAG_PRESS && Event.m_Key == KEY_PAGEUP)
+	{
+		if(!m_Selecting && !m_HasSelection)
+			ScrollPageUp();
+	}
+	else if(Event.m_Flags & IInput::FLAG_PRESS && Event.m_Key == KEY_PAGEDOWN)
+	{
+		if(!m_Selecting && !m_HasSelection)
+			ScrollPageDown();
+	}
+	else if(Event.m_Flags & IInput::FLAG_PRESS && Event.m_Key == KEY_MOUSE_WHEEL_UP)
+	{
+		if(!m_Selecting && !m_HasSelection)
+		{
+			m_BacklogCurLine += GetLinesToScroll(-1, 1);
+		}
+	}
+	else if(Event.m_Flags & IInput::FLAG_PRESS && Event.m_Key == KEY_MOUSE_WHEEL_DOWN)
+	{
+		if(!m_Selecting && !m_HasSelection)
+		{
+			m_BacklogCurLine -= GetLinesToScroll(1, 1);
+			if(m_BacklogCurLine < 0)
+				m_BacklogCurLine = 0;
+		}
+	}
+	else if(Event.m_Flags & IInput::FLAG_PRESS && Event.m_Key == KEY_HOME && m_Input.IsEmpty())
+	{
+		ScrollToTop();
+	}
+	else if(Event.m_Flags & IInput::FLAG_PRESS && Event.m_Key == KEY_END && m_Input.IsEmpty())
+	{
+		ScrollToBottom();
 	}
 	if(Event.m_Flags & IInput::FLAG_PRESS && Event.m_Key == KEY_TAB)
 	{
@@ -506,6 +668,13 @@ bool CChat::OnInput(const IInput::CEvent &Event)
 		}
 	}
 
+	if(m_BacklogCurLine != BacklogPrevLine)
+		m_BacklogCurLine = maximum(0, m_BacklogCurLine);
+
+	const int MaxBacklogCurLine = maximum(0, NumInitializedLines() - 1);
+	if(m_BacklogCurLine > MaxBacklogCurLine)
+		m_BacklogCurLine = MaxBacklogCurLine;
+
 	return true;
 }
 
@@ -526,7 +695,10 @@ void CChat::EnableMode(int Team)
 		Input()->Clear();
 		m_CompletionChosen = -1;
 		m_CompletionUsed = false;
+		m_BacklogCurLine = 0;
 		m_Input.Activate(EInputPriority::CHAT);
+		if(m_SelectorMouse == vec2(-1.0f, -1.0f))
+			m_SelectorMouse = vec2(Graphics()->WindowWidth(), Graphics()->WindowHeight()) * 0.5f;
 	}
 }
 
@@ -536,6 +708,7 @@ void CChat::DisableMode()
 	{
 		m_Mode = MODE_NONE;
 		m_Input.Deactivate();
+		m_BacklogCurLine = 0;
 	}
 }
 
@@ -817,12 +990,19 @@ void CChat::AddLine(int ClientId, int Team, const char *pLine)
 		PreviousLine.m_TimesRepeated++;
 		TextRender()->DeleteTextContainer(PreviousLine.m_TextContainerIndex);
 		Graphics()->DeleteQuadContainer(PreviousLine.m_QuadContainerIndex);
+		PreviousLine.m_RenderedOffsetType = -1;
 		PreviousLine.m_Time = time();
 		PreviousLine.m_aYOffset[0] = -1.0f;
 		PreviousLine.m_aYOffset[1] = -1.0f;
 
 		FChatMsgCheckAndPrint(PreviousLine);
 		return;
+	}
+
+	// Track new lines while selecting to prevent scroll offset issues
+	if(m_Selecting || m_HasSelection)
+	{
+		m_NewLineCounter++;
 	}
 
 	m_CurrentLine = (m_CurrentLine + 1) % MAX_LINES;
@@ -912,12 +1092,15 @@ void CChat::AddLine(int ClientId, int Team, const char *pLine)
 		if(LineAuthor.m_Active)
 		{
 			CurrentLine.m_Friend = LineAuthor.m_Friend;
-			CurrentLine.m_Paused = LineAuthor.m_Paused; // E-Client
+			CurrentLine.m_Paused = LineAuthor.m_Paused; // EClient
 			CurrentLine.m_pManagedTeeRenderInfo = GameClient()->CreateManagedTeeRenderInfo(LineAuthor);
 		}
 	}
 
 	FChatMsgCheckAndPrint(CurrentLine);
+
+	if(m_BacklogCurLine > 0)
+		m_BacklogCurLine = minimum(m_BacklogCurLine + 1, maximum(0, NumInitializedLines() - 1));
 
 	// play sound
 	int64_t Now = time();
@@ -976,6 +1159,9 @@ void CChat::AddLine(int ClientId, int Team, const char *pLine)
 			}
 		}
 	}
+
+	// TClient
+	GameClient()->m_Translate.AutoTranslate(CurrentLine);
 }
 
 void CChat::OnPrepareLines(float y)
@@ -1008,6 +1194,8 @@ void CChat::OnPrepareLines(float y)
 	float Begin = x;
 	float TextBegin = Begin + RealMsgPaddingX / 2.0f;
 	int OffsetType = IsScoreBoardOpen ? 1 : 0;
+	m_LinesRendered = 0;
+	int LinesSkipped = 0;
 
 	for(int i = 0; i < MAX_LINES; i++)
 	{
@@ -1017,11 +1205,31 @@ void CChat::OnPrepareLines(float y)
 		if(Now > Line.m_Time + 16 * time_freq() && !m_PrevShowChat)
 			break;
 
-		if(Line.m_TextContainerIndex.Valid() && !ForceRecreate)
+		if(LinesSkipped < m_BacklogCurLine)
+		{
+			LinesSkipped++;
 			continue;
+		}
+
+		const bool NeedsYOffsetRecalc = Line.m_aYOffset[OffsetType] < 0.0f;
+		const bool NeedsContainerRecreate = ForceRecreate || !Line.m_TextContainerIndex.Valid() || Line.m_RenderedOffsetType != OffsetType;
+
+		if(!NeedsContainerRecreate && !NeedsYOffsetRecalc)
+		{
+			// Even if we skip recreating the container, we still need to update y position
+			y -= Line.m_aYOffset[OffsetType];
+
+			// cut off if msgs waste too much space
+			if(y < HeightLimit)
+				break;
+
+			m_LinesRendered++;
+			continue;
+		}
 
 		TextRender()->DeleteTextContainer(Line.m_TextContainerIndex);
 		Graphics()->DeleteQuadContainer(Line.m_QuadContainerIndex);
+		Line.m_RenderedOffsetType = -1;
 
 		char aClientId[16] = "";
 		if(g_Config.m_ClShowIdsChat && Line.m_ClientId >= 0 && Line.m_aName[0] != '\0')
@@ -1052,6 +1260,28 @@ void CChat::OnPrepareLines(float y)
 			}
 		}
 
+		const char *pTranslatedError = nullptr;
+		const char *pTranslatedText = nullptr;
+		const char *pTranslatedLanguage = nullptr;
+		if(Line.m_pTranslateResponse != nullptr && Line.m_pTranslateResponse->m_Text[0])
+		{
+			// If hidden and there is translated text
+			if(pText != Line.m_aText)
+			{
+				pTranslatedError = Localize("Translated text hidden due to streamer mode");
+			}
+			else if(Line.m_pTranslateResponse->m_Error)
+			{
+				pTranslatedError = Line.m_pTranslateResponse->m_Text;
+			}
+			else
+			{
+				pTranslatedText = Line.m_pTranslateResponse->m_Text;
+				if(Line.m_pTranslateResponse->m_Language[0] != '\0')
+					pTranslatedLanguage = Line.m_pTranslateResponse->m_Language;
+			}
+		}
+
 		// get the y offset (calculate it if we haven't done that yet)
 		if(Line.m_aYOffset[OffsetType] < 0.0f)
 		{
@@ -1069,7 +1299,7 @@ void CChat::OnPrepareLines(float y)
 				{
 					TextRender()->TextEx(&MeasureCursor, g_Config.m_ClSpecPrefix);
 				}
-				if(g_Config.m_ClWarList && g_Config.m_ClWarlistPrefixes && GameClient()->m_WarList.GetAnyWar(Line.m_ClientId) && !Line.m_Whisper && !GameClient()->m_WarList.m_WarPlayers[Line.m_ClientId].m_IsMuted) // E-Client
+				if(g_Config.m_ClWarList && g_Config.m_ClWarlistPrefixes && GameClient()->m_WarList.GetAnyWar(Line.m_ClientId) && !Line.m_Whisper && !GameClient()->m_WarList.m_WarPlayers[Line.m_ClientId].m_IsMuted) // EClient
 				{
 					TextRender()->TextEx(&MeasureCursor, g_Config.m_ClWarlistPrefix);
 				}
@@ -1082,7 +1312,9 @@ void CChat::OnPrepareLines(float y)
 			TextRender()->TextEx(&MeasureCursor, aClientId);
 			TextRender()->TextEx(&MeasureCursor, Line.m_aName);
 			if(Line.m_TimesRepeated > 0)
+			{
 				TextRender()->TextEx(&MeasureCursor, aCount);
+			}
 
 			if(Line.m_ClientId >= 0 && Line.m_aName[0] != '\0')
 			{
@@ -1097,11 +1329,42 @@ void CChat::OnPrepareLines(float y)
 				AppendCursor.m_LineWidth -= MeasureCursor.m_LongestLineWidth;
 			}
 
-			// This is here so that the background has the correct size
-			if(g_Config.m_ClChatColorParsing && Line.m_ClientId != SERVER_MSG)
-				TextRender()->ColorParsing(Line.m_aText, &AppendCursor, ColorRGBA(1, 1, 1, 1), &Line.m_TextContainerIndex);
-			else
+			if(pTranslatedText)
+			{
+				// This is here so that the background has the correct size
+				if(g_Config.m_ClChatColorParsing && Line.m_ClientId != SERVER_MSG)
+					TextRender()->ColorParsing(pTranslatedText, &AppendCursor, ColorRGBA(1, 1, 1, 1), &Line.m_TextContainerIndex);
+				else
+					TextRender()->TextEx(&AppendCursor, pTranslatedText);
+				if(pTranslatedLanguage)
+				{
+					TextRender()->TextEx(&AppendCursor, " [");
+					TextRender()->TextEx(&AppendCursor, pTranslatedLanguage);
+					TextRender()->TextEx(&AppendCursor, "]");
+				}
+				// Dont add this to raw message
+				TextRender()->TextEx(&AppendCursor, " \n");
+				AppendCursor.m_FontSize *= 0.8f;
 				TextRender()->TextEx(&AppendCursor, pText);
+				TextRender()->TextEx(&AppendCursor, " \n");
+				AppendCursor.m_FontSize /= 0.8f;
+			}
+			else if(pTranslatedError)
+			{
+				TextRender()->TextEx(&AppendCursor, pText);
+				TextRender()->TextEx(&AppendCursor, "\n");
+				AppendCursor.m_FontSize *= 0.8f;
+				TextRender()->TextEx(&AppendCursor, pTranslatedError);
+				AppendCursor.m_FontSize /= 0.8f;
+			}
+			else
+			{
+				// This is here so that the background has the correct size
+				if(g_Config.m_ClChatColorParsing && Line.m_ClientId != SERVER_MSG)
+					TextRender()->ColorParsing(pText, &AppendCursor, ColorRGBA(1, 1, 1, 1), &Line.m_TextContainerIndex);
+				else
+					TextRender()->TextEx(&AppendCursor, pText);
+			}
 
 			Line.m_aYOffset[OffsetType] = AppendCursor.Height() + RealMsgPaddingY;
 		}
@@ -1111,6 +1374,8 @@ void CChat::OnPrepareLines(float y)
 		// cut off if msgs waste too much space
 		if(y < HeightLimit)
 			break;
+
+		m_LinesRendered++;
 
 		// the position the text was created
 		Line.m_TextYOffset = y + RealMsgPaddingY / 2.0f;
@@ -1124,28 +1389,9 @@ void CChat::OnPrepareLines(float y)
 		LineCursor.m_FontSize = FontSize;
 		LineCursor.m_LineWidth = LineWidth;
 
-		// Message is from valid player
+		std::string RawName;
 		if(Line.m_ClientId >= 0 && Line.m_aName[0] != '\0')
-		{
 			LineCursor.m_X += RealMsgPaddingTee;
-
-			if(g_Config.m_ClSpectatePrefix && Line.m_Paused && !Line.m_Whisper)
-			{
-				TextRender()->TextColor(color_cast<ColorRGBA>(ColorHSLA(g_Config.m_ClSpecColor)));
-				TextRender()->CreateOrAppendTextContainer(Line.m_TextContainerIndex, &LineCursor, g_Config.m_ClSpecPrefix);
-			}
-
-			if(g_Config.m_ClWarList && g_Config.m_ClWarlistPrefixes && GameClient()->m_WarList.GetAnyWar(Line.m_ClientId) && !Line.m_Whisper) // TClient
-			{
-				TextRender()->TextColor(GameClient()->m_WarList.GetPriorityColor(Line.m_ClientId));
-				TextRender()->CreateOrAppendTextContainer(Line.m_TextContainerIndex, &LineCursor, g_Config.m_ClWarlistPrefix);
-			}
-			else if(Line.m_Friend && g_Config.m_ClMessageFriend)
-			{
-				TextRender()->TextColor(color_cast<ColorRGBA>(ColorHSLA(g_Config.m_ClFriendColor)).WithAlpha(1.0f));
-				TextRender()->CreateOrAppendTextContainer(Line.m_TextContainerIndex, &LineCursor, g_Config.m_ClFriendPrefix);
-			}
-		}
 
 		// render name
 		ColorRGBA NameColor;
@@ -1178,18 +1424,47 @@ void CChat::OnPrepareLines(float y)
 
 		TextRender()->TextColor(NameColor);
 		TextRender()->CreateOrAppendTextContainer(Line.m_TextContainerIndex, &LineCursor, aClientId);
+		RawName += aClientId;
+		// Message is from valid player
+		if(Line.m_ClientId >= 0 && Line.m_aName[0] != '\0')
+		{
+			if(g_Config.m_ClSpectatePrefix && Line.m_Paused && !Line.m_Whisper)
+			{
+				TextRender()->TextColor(color_cast<ColorRGBA>(ColorHSLA(g_Config.m_ClSpecColor)));
+				TextRender()->CreateOrAppendTextContainer(Line.m_TextContainerIndex, &LineCursor, g_Config.m_ClSpecPrefix);
+				RawName += g_Config.m_ClSpecPrefix;
+			}
+
+			if(g_Config.m_ClWarList && g_Config.m_ClWarlistPrefixes && GameClient()->m_WarList.GetAnyWar(Line.m_ClientId) && !Line.m_Whisper) // TClient
+			{
+				TextRender()->TextColor(GameClient()->m_WarList.GetPriorityColor(Line.m_ClientId));
+				TextRender()->CreateOrAppendTextContainer(Line.m_TextContainerIndex, &LineCursor, g_Config.m_ClWarlistPrefix);
+				RawName += g_Config.m_ClWarlistPrefix;
+			}
+			else if(Line.m_Friend && g_Config.m_ClMessageFriend)
+			{
+				TextRender()->TextColor(color_cast<ColorRGBA>(ColorHSLA(g_Config.m_ClFriendColor)).WithAlpha(1.0f));
+				TextRender()->CreateOrAppendTextContainer(Line.m_TextContainerIndex, &LineCursor, g_Config.m_ClFriendPrefix);
+				RawName += g_Config.m_ClFriendPrefix;
+			}
+		}
+
+		TextRender()->TextColor(NameColor);
 		TextRender()->CreateOrAppendTextContainer(Line.m_TextContainerIndex, &LineCursor, Line.m_aName);
+		RawName += std::string(Line.m_aName);
 
 		if(Line.m_TimesRepeated > 0)
 		{
 			TextRender()->TextColor(1.0f, 1.0f, 1.0f, 0.3f);
 			TextRender()->CreateOrAppendTextContainer(Line.m_TextContainerIndex, &LineCursor, aCount);
+			RawName += aCount;
 		}
 
 		if(Line.m_ClientId >= 0 && Line.m_aName[0] != '\0')
 		{
 			TextRender()->TextColor(NameColor);
 			TextRender()->CreateOrAppendTextContainer(Line.m_TextContainerIndex, &LineCursor, ": ");
+			RawName += ": ";
 		}
 
 		ColorRGBA Color;
@@ -1217,12 +1492,69 @@ void CChat::OnPrepareLines(float y)
 		{
 			AppendCursor.m_StartX = LineCursor.m_X;
 			AppendCursor.m_LineWidth -= LineCursor.m_LongestLineWidth;
+			Line.m_StartX = LineCursor.m_X;
+			Line.m_LineWidth = AppendCursor.m_LineWidth;
 		}
 
-		if(g_Config.m_ClChatColorParsing && Line.m_ClientId != SERVER_MSG)
-			TextRender()->ColorParsing(Line.m_aText, &AppendCursor, Color, &Line.m_TextContainerIndex);
-		else
+		std::string RawMessage;
+
+		if(pTranslatedText)
+		{
+			if(g_Config.m_ClChatColorParsing && Line.m_ClientId != SERVER_MSG)
+				TextRender()->ColorParsing(pTranslatedText, &AppendCursor, Color, &Line.m_TextContainerIndex);
+			else
+				TextRender()->CreateOrAppendTextContainer(Line.m_TextContainerIndex, &AppendCursor, pTranslatedText);
+			RawMessage += TextRender()->RemoveColorCodes(pTranslatedText);
+
+			if(pTranslatedLanguage)
+			{
+				std::string Lang = " [" + std::string(pTranslatedLanguage) + "]";
+				ColorRGBA ColorLang = Color;
+				ColorLang.r *= 0.8f;
+				ColorLang.g *= 0.8f;
+				ColorLang.b *= 0.8f;
+				TextRender()->TextColor(ColorLang);
+				TextRender()->CreateOrAppendTextContainer(Line.m_TextContainerIndex, &AppendCursor, Lang.c_str());
+				RawMessage += Lang;
+			}
+			ColorRGBA ColorSub = Color;
+			ColorSub.r *= 0.7f;
+			ColorSub.g *= 0.7f;
+			ColorSub.b *= 0.7f;
+			TextRender()->TextColor(ColorSub);
+			TextRender()->CreateOrAppendTextContainer(Line.m_TextContainerIndex, &AppendCursor, "\n");
+			AppendCursor.m_FontSize *= 0.8f;
 			TextRender()->CreateOrAppendTextContainer(Line.m_TextContainerIndex, &AppendCursor, pText);
+			AppendCursor.m_FontSize /= 0.8f;
+			TextRender()->TextColor(Color);
+			// dont append this to raw message
+		}
+		else if(pTranslatedError)
+		{
+			TextRender()->CreateOrAppendTextContainer(Line.m_TextContainerIndex, &AppendCursor, pText);
+			ColorRGBA ColorSub = Color;
+			ColorSub.r = 0.7f;
+			ColorSub.g = 0.6f;
+			ColorSub.b = 0.6f;
+			TextRender()->TextColor(ColorSub);
+			TextRender()->CreateOrAppendTextContainer(Line.m_TextContainerIndex, &AppendCursor, "\n");
+			AppendCursor.m_FontSize *= 0.8f;
+			TextRender()->CreateOrAppendTextContainer(Line.m_TextContainerIndex, &AppendCursor, pTranslatedError);
+			AppendCursor.m_FontSize /= 0.8f;
+			TextRender()->TextColor(Color);
+			RawMessage += pText;
+			RawMessage += "\n";
+			RawMessage += pTranslatedError;
+		}
+		else
+		{
+			if(g_Config.m_ClChatColorParsing && Line.m_ClientId != SERVER_MSG)
+				TextRender()->ColorParsing(pText, &AppendCursor, Color, &Line.m_TextContainerIndex);
+			else
+				TextRender()->CreateOrAppendTextContainer(Line.m_TextContainerIndex, &AppendCursor, pText);
+			RawMessage += TextRender()->RemoveColorCodes(pText);
+			AppendCursor.m_vColorSplits.clear();
+		}
 
 		if(!g_Config.m_ClChatOld && (Line.m_aText[0] != '\0' || Line.m_aName[0] != '\0'))
 		{
@@ -1239,6 +1571,11 @@ void CChat::OnPrepareLines(float y)
 			Line.m_QuadContainerIndex = Graphics()->CreateRectQuadContainer(Begin, y, FullWidth, Line.m_aYOffset[OffsetType], MessageRounding(), IGraphics::CORNER_ALL);
 		}
 
+		// EClient
+		Line.m_RenderedName = RawName;
+		Line.m_RenderedText = RawMessage;
+		Line.m_RenderedOffsetType = OffsetType;
+
 		TextRender()->SetRenderFlags(CurRenderFlags);
 		if(Line.m_TextContainerIndex.Valid())
 			TextRender()->UploadTextContainer(Line.m_TextContainerIndex);
@@ -1251,6 +1588,11 @@ void CChat::OnRender()
 {
 	if(Client()->State() != IClient::STATE_ONLINE && Client()->State() != IClient::STATE_DEMOPLAYBACK)
 		return;
+
+	if(m_Mode != MODE_NONE)
+	{
+		Ui()->StartCheck();
+	}
 
 	// send pending chat messages
 	if(m_PendingChatCounter > 0 && m_LastChatSend + time_freq() < time())
@@ -1274,6 +1616,66 @@ void CChat::OnRender()
 	float x = 5.0f;
 	float y = 300.0f - 20.0f * FontSize() / 6.0f;
 	float ScaledFontSize = FontSize() * (8.0f / 6.0f);
+
+	// Handle mouse selection for chat when chat mode is active
+	if(m_Mode != MODE_NONE)
+	{
+		const vec2 ScreenSize = vec2(Width, Height);
+
+		const auto &&GetMousePosition = [&]() -> vec2 {
+			const vec2 WindowSize = vec2(Graphics()->WindowWidth(), Graphics()->WindowHeight());
+			return m_SelectorMouse / WindowSize * ScreenSize;
+		};
+
+		const vec2 MousePos = GetMousePosition();
+
+		// Chat input area bounds (rough estimate - below the input line)
+		const float ChatInputAreaY = y;
+
+		// Use KeyIsPressed for mouse button state (works with UI mouse system)
+		const bool MousePressed = Input()->KeyIsPressed(KEY_MOUSE_1);
+
+		// Check if mouse is pressed (start selection) - only if above chat input (lower Y value)
+		if(!m_Selecting && MousePressed && MousePos.y < ChatInputAreaY)
+		{
+			m_Selecting = true;
+			m_SelectionMousePress = MousePos;
+			m_SelectionMouseRelease = m_SelectionMousePress;
+			m_HasSelection = false;
+			m_SelectionText.clear();
+		}
+
+		// Update release position while selecting
+		if(m_Selecting)
+		{
+			m_SelectionMouseRelease = GetMousePosition();
+		}
+
+		// Check if mouse is released (end selection)
+		if(m_Selecting && !MousePressed)
+		{
+			m_Selecting = false;
+			// Keep selection state if we have a valid selection
+		}
+
+		// Clear selection if clicking in the input area
+		if(MousePressed && MousePos.y >= ChatInputAreaY && m_HasSelection)
+		{
+			m_HasSelection = false;
+			m_SelectionText.clear();
+		}
+	}
+	else
+	{
+		// Clear selection when chat mode is disabled
+		if(m_Selecting || m_HasSelection)
+		{
+			m_Selecting = false;
+			m_HasSelection = false;
+			m_SelectionText.clear();
+		}
+	}
+
 	if(m_Mode != MODE_NONE)
 	{
 		// render chat input
@@ -1335,7 +1737,7 @@ void CChat::OnRender()
 		m_Input.SetScrollOffset(ScrollOffset);
 		m_Input.SetScrollOffsetChange(ScrollOffsetChange);
 
-		std::vector<CCommand> vChatCommands = GameClient()->m_Bindchat.m_vChatCommands;
+		const std::vector<CCommand> &vChatCommands = GameClient()->m_Bindchat.m_vChatCommands;
 
 		// Autocompletion hint
 		if(GameClient()->m_Bindchat.ValidPrefix(m_Input.GetString()[0]) && m_Input.GetString()[1] != '\0' && !vChatCommands.empty())
@@ -1362,6 +1764,8 @@ void CChat::OnRender()
 #endif
 		return;
 
+	m_BacklogCurLine = std::clamp(m_BacklogCurLine, 0, maximum(0, NumInitializedLines() - 1));
+
 	y -= ScaledFontSize;
 
 	OnPrepareLines(y);
@@ -1374,12 +1778,43 @@ void CChat::OnRender()
 
 	float RealMsgPaddingX = MessagePaddingX();
 	float RealMsgPaddingY = MessagePaddingY();
+	m_LinesRendered = 0;
 
 	if(g_Config.m_ClChatOld)
 	{
 		RealMsgPaddingX = 0;
 		RealMsgPaddingY = 0;
 	}
+
+	// For selection handling
+	const bool IsSelecting = m_Mode != MODE_NONE && (m_Selecting || m_HasSelection);
+
+	// When selecting, skip rendering new lines to keep the view stable
+	// Instead of adjusting mouse positions, we simply don't show the new messages until selection ends
+	int LinesToSkipForSelection = 0;
+	if(IsSelecting && m_NewLineCounter > 0 && m_BacklogCurLine == 0)
+	{
+		LinesToSkipForSelection = m_NewLineCounter;
+	}
+	// Only reset counter when not selecting
+	if(!IsSelecting)
+		m_NewLineCounter = 0;
+
+	// Determine selection Y range
+	float SelectionMinY = minimum(m_SelectionMousePress.y, m_SelectionMouseRelease.y);
+	float SelectionMaxY = maximum(m_SelectionMousePress.y, m_SelectionMouseRelease.y);
+
+	// Track lines for building selection text (we process from newest to oldest, so we need to reverse later)
+	struct SLineSelectionInfo
+	{
+		int m_LineIndex;
+		float m_Y;
+		float m_Height;
+		std::string m_Text;
+		int m_SelectionStart;
+		int m_SelectionEnd;
+	};
+	std::vector<SLineSelectionInfo> vSelectedLines;
 
 	for(int i = 0; i < MAX_LINES; i++)
 	{
@@ -1389,11 +1824,22 @@ void CChat::OnRender()
 		if(Now > Line.m_Time + 16 * time_freq() && !m_PrevShowChat)
 			break;
 
+		// Skip new lines that arrived during selection to keep view stable
+		if(i < LinesToSkipForSelection)
+			continue;
+
+		// Adjust index for skipped lines when checking backlog
+		const int AdjustedIndex = i - LinesToSkipForSelection;
+		if(AdjustedIndex < m_BacklogCurLine)
+			continue;
+
 		y -= Line.m_aYOffset[OffsetType];
 
 		// cut off if msgs waste too much space
 		if(y < HeightLimit)
 			break;
+
+		++m_LinesRendered;
 
 		float Blend = Now > Line.m_Time + 14 * time_freq() && !m_PrevShowChat ? 1.0f - (Now - Line.m_Time - 14 * time_freq()) / (2.0f * time_freq()) : 1.0f;
 
@@ -1406,6 +1852,25 @@ void CChat::OnRender()
 				Graphics()->SetColor(color_cast<ColorRGBA>(ColorHSLA(g_Config.m_ClChatBackgroundColor, true)).WithMultipliedAlpha(Blend));
 				Graphics()->RenderQuadContainerEx(Line.m_QuadContainerIndex, 0, -1, 0, ((y + RealMsgPaddingY / 2.0f) - Line.m_TextYOffset));
 			}
+		}
+
+		// Check if this line is in the selection range
+		const float LineTop = y;
+		const float LineBottom = y + Line.m_aYOffset[OffsetType];
+
+		if(IsSelecting && LineBottom >= SelectionMinY && LineTop <= SelectionMaxY)
+		{
+			// This line overlaps with selection - store info for later rendering
+			SLineSelectionInfo Info;
+			Info.m_LineIndex = i;
+			Info.m_Y = y;
+			Info.m_Height = Line.m_aYOffset[OffsetType];
+			// Text will be built in the selection loop below where we have all the same logic
+			Info.m_Text = "";
+			Info.m_SelectionStart = -1;
+			Info.m_SelectionEnd = -1;
+
+			vSelectedLines.push_back(Info);
 		}
 
 		if(Line.m_TextContainerIndex.Valid())
@@ -1431,6 +1896,117 @@ void CChat::OnRender()
 			const ColorRGBA TextOutlineColor = TextRender()->DefaultTextOutlineColor().WithMultipliedAlpha(Blend);
 			TextRender()->RenderTextContainer(Line.m_TextContainerIndex, TextColor, TextOutlineColor, 0, (y + RealMsgPaddingY / 2.0f) - Line.m_TextYOffset);
 		}
+	}
+
+	if(IsSelecting && !vSelectedLines.empty())
+	{
+		const int TeeSize = MessageTeeSize();
+		float RealMsgPaddingTee = TeeSize + MESSAGE_TEE_PADDING_RIGHT;
+
+		float Begin = x;
+		float TextBegin = Begin + RealMsgPaddingX / 2.0f;
+
+		float LineWidth = (IsScoreBoardOpen ? maximum(85.0f, (FontSize() * 85.0f / 6.0f)) : g_Config.m_ClChatWidth) - (RealMsgPaddingX * 1.5f) - RealMsgPaddingTee;
+
+		m_SelectionText.clear();
+		bool AnySelection = false;
+
+		TextRender()->TextSelectionColor(TextRender()->DefaultTextSelectionColor());
+
+		for(auto &Info : vSelectedLines)
+		{
+			CLine &Line = m_aLines[((m_CurrentLine - Info.m_LineIndex) + MAX_LINES) % MAX_LINES];
+
+			CTextCursor LineCursor;
+			LineCursor.SetPosition(vec2(TextBegin, Info.m_Y + RealMsgPaddingY / 2.0f));
+			LineCursor.m_FontSize = FontSize();
+			LineCursor.m_LineWidth = LineWidth;
+			LineCursor.m_Flags = TEXTFLAG_RENDER;
+			LineCursor.m_CalculateSelectionMode = TEXT_CURSOR_SELECTION_MODE_CALCULATE;
+			LineCursor.m_PressMouse = m_SelectionMousePress;
+			LineCursor.m_ReleaseMouse = m_SelectionMouseRelease;
+			LineCursor.m_SelectionHeightFactor = 1.0f;
+
+			if(Line.m_ClientId >= 0 && Line.m_aName[0] != '\0')
+				LineCursor.m_X += RealMsgPaddingTee;
+
+			if(!IsScoreBoardOpen && !g_Config.m_ClChatOld)
+			{
+				LineCursor.m_StartX = Line.m_StartX;
+				LineCursor.m_LineWidth = Line.m_LineWidth;
+			}
+
+			std::string FullText = Line.m_RenderedName + Line.m_RenderedText;
+
+			TextRender()->TextColor(ColorRGBA(0.0f, 0.0f, 0.0f, 0.0f));
+			TextRender()->TextEx(&LineCursor, FullText.c_str(), -1);
+			TextRender()->TextColor(TextRender()->DefaultTextColor());
+
+			Info.m_Text = FullText;
+
+			int SelStart = -1;
+			int SelEnd = -1;
+
+			int LineSelStart = minimum(LineCursor.m_SelectionStart, LineCursor.m_SelectionEnd);
+			int LineSelEnd = maximum(LineCursor.m_SelectionStart, LineCursor.m_SelectionEnd);
+
+			// Combine selections
+			if(LineSelStart >= 0 && LineSelEnd > LineSelStart)
+			{
+				SelStart = LineSelStart;
+				SelEnd = LineSelEnd;
+			}
+
+			if(SelStart >= 0 && SelEnd >= 0 && SelStart < SelEnd)
+			{
+				Info.m_SelectionStart = SelStart;
+				Info.m_SelectionEnd = SelEnd;
+			}
+			else
+			{
+				Info.m_SelectionStart = -1;
+				Info.m_SelectionEnd = -1;
+			}
+		}
+
+		// Build selection text (lines are in reverse order, so reverse to get correct order)
+		for(auto &vSelectedLine : std::ranges::reverse_view(vSelectedLines))
+		{
+			if(vSelectedLine.m_SelectionStart >= 0 && vSelectedLine.m_SelectionEnd >= 0 && vSelectedLine.m_SelectionStart != vSelectedLine.m_SelectionEnd)
+			{
+				AnySelection = true;
+				if(!m_SelectionText.empty())
+					m_SelectionText += "\n";
+
+				// Extract selected portion of text (Info.m_Text contains name: message)
+				const size_t OffStart = str_utf8_offset_chars_to_bytes(vSelectedLine.m_Text.c_str(), vSelectedLine.m_SelectionStart);
+				const size_t OffEnd = str_utf8_offset_chars_to_bytes(vSelectedLine.m_Text.c_str(), vSelectedLine.m_SelectionEnd);
+				if(OffEnd > OffStart && OffEnd <= vSelectedLine.m_Text.length())
+					m_SelectionText += vSelectedLine.m_Text.substr(OffStart, OffEnd - OffStart);
+			}
+		}
+
+		m_HasSelection = AnySelection;
+		if(!AnySelection)
+			m_SelectionText.clear();
+	}
+	else if(!m_Selecting)
+	{
+		// Clear selection when not selecting and no selection exists
+		if(!m_HasSelection)
+		{
+			m_SelectionText.clear();
+		}
+	}
+
+	if(m_Mode != MODE_NONE)
+	{
+		Ui()->MapScreen();
+		const vec2 WindowSize = vec2(Graphics()->WindowWidth(), Graphics()->WindowHeight());
+		const CUIRect *pUiScreen = Ui()->Screen();
+		const vec2 CursorPos = m_SelectorMouse / WindowSize * vec2(pUiScreen->w, pUiScreen->h);
+		RenderTools()->RenderCursor(CursorPos, 24.0f);
+		Ui()->FinishCheck();
 	}
 }
 
@@ -1508,7 +2084,7 @@ void CChat::SendChatQueued(const char *pLine)
 	}
 }
 
-// E-Client
+// EClient
 bool CChat::ChatDetection(int ClientId, int Team, const char *pLine)
 {
 	if(Client()->State() == CClient::STATE_DEMOPLAYBACK)
@@ -1679,7 +2255,7 @@ bool CChat::ChatDetection(int ClientId, int Team, const char *pLine)
 				if(!str_find_nocase(pLine, "github.com") && !str_find_nocase(pLine, "ddnet") &&
 					!str_find_nocase(pLine, "tater") && !str_find_nocase(pLine, "tclient") && !str_find_nocase(pLine, "t-client") && !str_find_nocase(pLine, "tclient.app") &&
 					!str_find_nocase(pLine, "aiodob") && !str_find_nocase(pLine, "a-client") && !str_find(pLine, "A Client") && !str_find(pLine, "A client") &&
-					!str_find_nocase(pLine, "entity") && !str_find_nocase(pLine, "e-client") && !str_find_nocase(pLine, "eclient") &&
+					!str_find_nocase(pLine, "entity") && !str_find_nocase(pLine, "EClient") && !str_find_nocase(pLine, "eclient") &&
 					!str_find_nocase(pLine, "chillerbot") && !str_find_nocase(pLine, "cactus"))
 					AdBotFound = true;
 				if(str_find(pLine, " ")) // This is the little white space it uses between some letters

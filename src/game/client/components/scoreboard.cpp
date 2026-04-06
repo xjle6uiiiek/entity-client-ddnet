@@ -719,7 +719,6 @@ void CScoreboard::RenderScoreboard(CUIRect Scoreboard, int Team, int CountStart,
 			if(pGameInfoObj && (pGameInfoObj->m_GameFlags & GAMEFLAG_FLAGS) &&
 				pGameDataObj && (pGameDataObj->m_FlagCarrierRed == pInfo->m_ClientId || pGameDataObj->m_FlagCarrierBlue == pInfo->m_ClientId))
 			{
-				Graphics()->BlendNormal();
 				Graphics()->TextureSet(pGameDataObj->m_FlagCarrierBlue == pInfo->m_ClientId ? GameClient()->m_GameSkin.m_SpriteFlagBlue : GameClient()->m_GameSkin.m_SpriteFlagRed);
 				Graphics()->QuadsBegin();
 				Graphics()->QuadsSetSubset(1.0f, 0.0f, 0.0f, 1.0f);
@@ -733,7 +732,6 @@ void CScoreboard::RenderScoreboard(CUIRect Scoreboard, int Team, int CountStart,
 			// skin
 			if(RenderDead)
 			{
-				Graphics()->BlendNormal();
 				Graphics()->TextureSet(m_DeadTeeTexture);
 				Graphics()->QuadsBegin();
 				if(GameClient()->IsTeamPlay())
@@ -1202,7 +1200,7 @@ CUi::EPopupMenuFunctionResult CScoreboard::CScoreboardPopupContext::Render(void 
 		Container.VSplitLeft(ActionSpacing, nullptr, &Container);
 		Container.VSplitLeft(ActionSize, &Action, &Container);
 
-		bool Muted = pScoreboard->GameClient()->m_WarList.m_WarPlayers[pPopupContext->m_ClientId].m_IsMuted; // E-Client
+		bool Muted = pScoreboard->GameClient()->m_WarList.m_WarPlayers[pPopupContext->m_ClientId].m_IsMuted; // EClient
 
 		if(pUi->DoButton_FontIcon(&pPopupContext->m_MuteAction, FontIcon::BAN, Muted, &Action, BUTTONFLAG_LEFT, ActionCorners))
 		{
@@ -1211,7 +1209,7 @@ CUi::EPopupMenuFunctionResult CScoreboard::CScoreboardPopupContext::Render(void 
 			else
 				pScoreboard->GameClient()->m_WarList.RemoveMute(Client.m_aName);
 		}
-		// E-Client
+		// EClient
 		pScoreboard->GameClient()->m_Tooltips.DoToolTip(&pPopupContext->m_MuteAction, &Action, Muted ? Localize("Unmute") : Localize("Mute"));
 
 		Container.VSplitLeft(ActionSpacing, nullptr, &Container);

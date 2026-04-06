@@ -436,6 +436,58 @@ bool CMenus::DoLine_RadioMenu(CUIRect &View, const char *pLabel, std::vector<CBu
 	return Pressed;
 }
 
+// EClient
+bool CMenus::DoLine_RadioMenu_Compact(CUIRect &View, const char *pLabel, std::vector<CButtonContainer> &vButtonContainers, const std::vector<const char *> &vLabels, const std::vector<int> &vValues, int &Value, float LabelSpacing, const std::vector<const char *> *pvTooltips)
+{
+	dbg_assert(vButtonContainers.size() == vValues.size(), "vButtonContainers and vValues must have the same size");
+	dbg_assert(vButtonContainers.size() == vLabels.size(), "vButtonContainers and vLabels must have the same size");
+	if(pvTooltips != nullptr)
+		dbg_assert(vButtonContainers.size() == pvTooltips->size(), "vButtonContainers and pvTooltips must have the same size");
+
+	const int N = vButtonContainers.size();
+	dbg_assert(N > 0, "vButtonContainers must not be empty");
+
+	const float TopSpacing = 2.0f;
+	const float ButtonHeight = 20.0f;
+	const float LabelFontSize = 13.0f;
+
+	CUIRect Label, Buttons;
+	View.HSplitTop(TopSpacing, nullptr, &View);
+	View.HSplitTop(ButtonHeight, &Buttons, &View);
+
+	const float LabelWidth = minimum(TextRender()->TextWidth(LabelFontSize, pLabel), maximum(0.0f, Buttons.w - LabelSpacing));
+	Buttons.VSplitLeft(LabelWidth, &Label, &Buttons);
+	Buttons.VSplitLeft(minimum(LabelSpacing, Buttons.w), nullptr, &Buttons);
+	Buttons.HMargin(2.0f, &Buttons);
+
+	Ui()->DoLabel(&Label, pLabel, LabelFontSize, TEXTALIGN_ML);
+
+	const float W = Buttons.w / N;
+	bool Pressed = false;
+	for(int i = 0; i < N; ++i)
+	{
+		CUIRect Button;
+		Buttons.VSplitLeft(W, &Button, &Buttons);
+
+		int Corner = IGraphics::CORNER_NONE;
+		if(i == 0)
+			Corner = IGraphics::CORNER_L;
+		if(i == N - 1)
+			Corner = IGraphics::CORNER_R;
+
+		if(DoButton_Menu(&vButtonContainers[i], vLabels[i], vValues[i] == Value, &Button, BUTTONFLAG_LEFT, nullptr, Corner))
+		{
+			Pressed = true;
+			Value = vValues[i];
+		}
+
+		if(pvTooltips != nullptr && (*pvTooltips)[i] != nullptr && (*pvTooltips)[i][0] != '\0')
+			GameClient()->m_Tooltips.DoToolTip(&vButtonContainers[i], &Button, (*pvTooltips)[i]);
+	}
+
+	return Pressed;
+}
+
 ColorHSLA CMenus::DoLine_ColorPicker(CButtonContainer *pResetId, const float LineSize, const float LabelSize, const float BottomMargin, CUIRect *pMainRect, const char *pText, unsigned int *pColorValue, const ColorRGBA DefaultColor, bool CheckBoxSpacing, int *pCheckBoxValue, bool Alpha)
 {
 	CUIRect Section, ColorPickerButton, ResetButton, Label;
@@ -598,7 +650,7 @@ void CMenus::RenderMenubar(CUIRect Box, IClient::EClientState ClientState)
 		}
 		GameClient()->m_Tooltips.DoToolTip(&s_DemoButton, &Button, Localize("Demos"));
 
-		// E-Client
+		// EClient
 		Box.VSplitRight(10.0f, &Box, nullptr);
 		Box.VSplitRight(33.0f, &Box, &Button);
 		static CButtonContainer s_EClientButton;
@@ -860,7 +912,6 @@ void CMenus::RenderLoading(const char *pCaption, const char *pContent, int Incre
 	CUIRect Box;
 	Ui()->Screen()->Margin(160.0f, &Box);
 
-	Graphics()->BlendNormal();
 	Graphics()->TextureClear();
 	Box.Draw(ColorRGBA(0.0f, 0.0f, 0.0f, 0.5f), IGraphics::CORNER_ALL, 15.0f);
 	Box.Margin(20.0f, &Box);
@@ -1007,7 +1058,7 @@ void CMenus::OnInit()
 	Graphics()->QuadContainerAddSprite(m_DirectionQuadContainerIndex, 0.f, 0.f, 22.f);
 	Graphics()->QuadContainerUpload(m_DirectionQuadContainerIndex);
 
-	// E-Client
+	// EClient
 
 	// Rainbow Color again for the preview..
 	m_MenusRainbowColor = g_Config.m_ClPlayerColorBody;
@@ -2665,8 +2716,6 @@ void CMenus::UpdateColors()
 
 void CMenus::RenderBackground()
 {
-	Graphics()->BlendNormal();
-
 	const float ScreenHeight = 300.0f;
 	const float ScreenWidth = ScreenHeight * Graphics()->ScreenAspect();
 	Graphics()->MapScreen(0.0f, 0.0f, ScreenWidth, ScreenHeight);
@@ -2850,7 +2899,7 @@ void CMenus::RefreshBrowserTab(bool Force)
 			UpdateCommunityCache(true);
 		}
 	}
-	UpdateWarlistCache();
+	UpdateWarlistCache(); // EClient
 }
 
 void CMenus::ForceRefreshLanPage()

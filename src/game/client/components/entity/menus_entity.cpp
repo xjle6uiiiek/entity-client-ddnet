@@ -1,4 +1,3 @@
-
 #include <base/color.h>
 #include <base/math.h>
 #include <base/str.h>
@@ -197,13 +196,11 @@ void CMenus::RenderEClientNewsPage(CUIRect MainView)
 
 	// --- Begin scroll region ---
 	static CScrollRegion s_ScrollRegion;
-	vec2 ScrollOffset(0.0f, 0.0f);
 	CScrollRegionParams ScrollParams;
 	ScrollParams.m_ScrollUnit = Ui()->IsPopupOpen() ? 0.0f : ScrollSpeed;
-	s_ScrollRegion.Begin(&MainView, &ScrollOffset, &ScrollParams);
+	s_ScrollRegion.Begin(&MainView, &ScrollParams);
 
 	CUIRect ContentView = MainView;
-	ContentView.y += ScrollOffset.y;
 
 	CUIRect Label;
 	const char *pStr = GameClient()->m_EntityInfo.m_aNews;
@@ -1216,7 +1213,7 @@ void CMenus::RenderSettingsBindwheel(CUIRect MainView)
 	int HoveringIndex = -1;
 
 	float MouseDist = distance(Pos, Ui()->MousePos());
-	if(GameClient()->m_Bindwheel.m_vBinds.empty()) // E-Client -> Fixes a Crash
+	if(GameClient()->m_Bindwheel.m_vBinds.empty()) // EClient -> Fixes a Crash
 	{
 		float Size = 20.0f;
 		TextRender()->Text(Pos.x - TextRender()->TextWidth(Size, "Empty") / 2.0f, Pos.y - Size / 2, Size, "Empty");
@@ -2176,18 +2173,16 @@ void CMenus::RenderSettingsProfiles(CUIRect MainView)
 void CMenus::RenderSettingsEClient(CUIRect MainView)
 {
 	static CScrollRegion s_ScrollRegion;
-	vec2 ScrollOffset(0.0f, 0.0f);
 	CScrollRegionParams ScrollParams;
 	ScrollParams.m_ScrollUnit = Ui()->IsPopupOpen() ? 0.0f : ScrollSpeed;
-	s_ScrollRegion.Begin(&MainView, &ScrollOffset, &ScrollParams);
-	MainView.y += ScrollOffset.y;
+	s_ScrollRegion.Begin(&MainView, &ScrollParams);
 
 	CUIRect Label, Button;
 	// left side in settings menu
 
-	CUIRect Automation, FreezeKill, ChatSettings, GoresMode,
-		MenuSettings, FastInput, AntiLatency, FrozenTeeHud, AntiPingSmoothing, GhostTools;
-	MainView.VSplitMid(&Automation, &GoresMode);
+	CUIRect Automation, FreezeKill, ChatSettings,
+		Performance, GoresMode, MenuSettings, FastInput, AntiLatency, FrozenTeeHud, AntiPingSmoothing, GhostTools;
+	MainView.VSplitMid(&Automation, &Performance);
 
 	/* Automation */
 	{
@@ -2555,10 +2550,33 @@ void CMenus::RenderSettingsEClient(CUIRect MainView)
 	}
 	// right side
 
+	/* Performance */
+	{
+		Performance.VMargin(5.0f, &Performance);
+		Performance.HSplitTop(80.0f, &Performance, &GoresMode);
+		if(s_ScrollRegion.AddRect(Performance))
+		{
+			Performance.Draw(BackgroundColor, IGraphics::CORNER_ALL, CornerRoundness);
+			Performance.VMargin(Margin, &Performance);
+
+			Performance.HSplitTop(HeaderHeight, &Button, &Performance);
+			Ui()->DoLabel(&Button, Localize("Performance"), HeaderSize, HeaderAlignment);
+
+			if(DoButton_CheckBoxAutoVMarginAndSet(&g_Config.m_ClHighProcessPriority, ("High DDNet Process Priority"), &g_Config.m_ClHighProcessPriority, &Performance, LineSize))
+				GameClient()->m_EClient.SetDDNetProcessPriority(g_Config.m_ClHighProcessPriority);
+
+			if(DoButton_CheckBoxAutoVMarginAndSet(&g_Config.m_ClDiscordNormalProcessPriority, ("Lower Discords Process Priority"), &g_Config.m_ClDiscordNormalProcessPriority, &Performance, LineSize))
+			{
+				if(g_Config.m_ClDiscordNormalProcessPriority)
+					GameClient()->m_EClient.StartDiscordPriorityThread();
+			}
+		}
+	}
+
 	/* Gores Mode */
 	{
-		GoresMode.VMargin(5.0f, &GoresMode);
-		GoresMode.HSplitTop(120.0f, &GoresMode, &FastInput);
+		GoresMode.HSplitTop(Margin, nullptr, &GoresMode);
+		GoresMode.HSplitTop(100.0f, &GoresMode, &FastInput);
 		if(s_ScrollRegion.AddRect(GoresMode))
 		{
 			GoresMode.Draw(BackgroundColor, IGraphics::CORNER_ALL, CornerRoundness);
@@ -2567,43 +2585,10 @@ void CMenus::RenderSettingsEClient(CUIRect MainView)
 			GoresMode.HSplitTop(HeaderHeight, &Button, &GoresMode);
 			Ui()->DoLabel(&Button, Localize("Gores Mode"), HeaderSize, HeaderAlignment);
 
-			if(DoButton_CheckBoxAutoVMarginAndSet(&g_Config.m_ClGoresMode, ("\"advanced\" Gores Mode"), &g_Config.m_ClGoresMode, &GoresMode, LineSize))
-				GameClient()->m_EClient.ToggleGoresMode(g_Config.m_ClGoresMode);
+			DoButton_CheckBoxAutoVMarginAndSet(&g_Config.m_ClGoresMode, ("\"advanced\" Gores Mode"), &g_Config.m_ClGoresMode, &GoresMode, LineSize);
 
 			DoButton_CheckBoxAutoVMarginAndSet(&g_Config.m_ClGoresModeDisableIfWeapons, ("Disable if You Have Any Weapon"), &g_Config.m_ClGoresModeDisableIfWeapons, &GoresMode, LineSize);
 			DoButton_CheckBoxAutoVMarginAndSet(&g_Config.m_ClAutoEnableGoresMode, ("Auto Enable if Gametype is \"Gores\""), &g_Config.m_ClAutoEnableGoresMode, &GoresMode, LineSize);
-
-			// Key Reader for Gores Mode
-			{
-				static CBindSlot s_GoresBind(g_Config.m_ClGoresModeKey, 0);
-				if(s_GoresBind.m_Key != g_Config.m_ClGoresModeKey)
-					s_GoresBind.m_Key = g_Config.m_ClGoresModeKey;
-
-				const char *pText = Localize("Gores Mode Key:");
-				float Length = TextRender()->TextBoundingBox(FontSize, pText).m_W + 3.5f;
-				CUIRect KeyLabel, KeyButton;
-				GoresMode.HSplitTop(LineSize, &KeyButton, &GoresMode);
-				KeyButton.VSplitLeft(Length, &KeyLabel, &KeyButton);
-
-				Ui()->DoLabel(&KeyLabel, pText, 14.0f, TEXTALIGN_ML);
-
-				static CButtonContainer s_ReaderButtonGores;
-				const auto Result = GameClient()->m_KeyBinder.DoKeyReader(&s_ReaderButtonGores, &KeyButton, s_GoresBind, false);
-
-				if(Result.m_Bind != s_GoresBind)
-				{
-					GameClient()->m_EClient.GoresModeRestore();
-
-					if(Result.m_Bind.m_Key == KEY_UNKNOWN)
-						g_Config.m_ClGoresModeKey = KEY_UNKNOWN;
-					else
-					{
-						s_GoresBind = Result.m_Bind;
-						g_Config.m_ClGoresModeKey = s_GoresBind.m_Key;
-					}
-					GameClient()->m_EClient.GoresModeSave();
-				}
-			}
 		}
 	}
 
@@ -2847,11 +2832,9 @@ void CMenus::RenderSettingsEClient(CUIRect MainView)
 void CMenus::RenderSettingsVisual(CUIRect MainView)
 {
 	static CScrollRegion s_ScrollRegion;
-	vec2 ScrollOffset(0.0f, 0.0f);
 	CScrollRegionParams ScrollParams;
 	ScrollParams.m_ScrollUnit = Ui()->IsPopupOpen() ? 0.0f : ScrollSpeed;
-	s_ScrollRegion.Begin(&MainView, &ScrollOffset, &ScrollParams);
-	MainView.y += ScrollOffset.y;
+	s_ScrollRegion.Begin(&MainView, &ScrollParams);
 
 	CUIRect Label, Button;
 
@@ -3551,7 +3534,27 @@ void CMenus::RenderSettingsVisual(CUIRect MainView)
 				DoButton_CheckBoxAutoVMarginAndSet(&g_Config.m_ClRevertTeamColors, Localize("Use Old Team Colors"), &g_Config.m_ClRevertTeamColors, &Miscellaneous, LineSize);
 
 				Miscellaneous.HSplitTop(5.0f, &Button, &Miscellaneous);
-				DoButton_CheckBoxAutoVMarginAndSet(&g_Config.m_ClShowMovingTilesEntities, Localize("Show Moving Tiles in entities"), &g_Config.m_ClShowMovingTilesEntities, &Miscellaneous, LineSize);
+
+				{
+					static std::vector<CButtonContainer> s_vButtonContainers = {{}, {}, {}, {}};
+					static const std::vector<const char *> s_vTooltips = {
+						Localize("Don't show moving tiles in entities"),
+						Localize("Use map design for moving tilesin entities"),
+						Localize("Use selected asset colors for moving tiles in entities"),
+						Localize("Use asset colors and map design for moving tiles in entities"),
+					};
+					int Value = g_Config.m_ClShowMovingTilesEntities;
+					if(DoLine_RadioMenu_Compact(Miscellaneous, Localize("Moving Tiles:"),
+						   s_vButtonContainers,
+						   {"Off", "Design", "Entity", "Both"},
+						   {0, 1, 2, 3},
+						   Value,
+						   5.0f,
+						   &s_vTooltips))
+					{
+						g_Config.m_ClShowMovingTilesEntities = Value;
+					}
+				}
 
 				Miscellaneous.HSplitTop(5.0f, &Button, &Miscellaneous);
 				Miscellaneous.HSplitTop(LineSize, &Button, &Miscellaneous);

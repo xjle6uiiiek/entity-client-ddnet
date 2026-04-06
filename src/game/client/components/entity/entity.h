@@ -8,6 +8,7 @@
 
 #include <game/client/component.h>
 
+#include <atomic>
 #include <vector>
 
 class CEClient : public CComponent
@@ -15,7 +16,6 @@ class CEClient : public CComponent
 	bool m_AttemptedJoinTeam;
 	bool m_JoinedTeam;
 
-	bool m_WeaponsGot;
 	bool m_GoresServer;
 
 	// Reply to Ping
@@ -58,15 +58,20 @@ class CEClient : public CComponent
 
 	static void ConReplyLast(IConsole::IResult *pResult, void *pUserData);
 
-	static void ConCrash(IConsole::IResult *pResult, void *pUserData);
-
 	static void ConSpectateId(IConsole::IResult *pResult, void *pUserData);
 
-	static void ConchainGoresMode(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
+	static void ConCrash(IConsole::IResult *pResult, void *pUserData);
+
 	static void ConchainFastInputs(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
 	static void ConchainDiscordUpdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
 
+	static void ConchainDDNetProcessPriority(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
+	static void ConchainDiscordProcessPriority(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
+
+	static void DiscordPriorityThread(void *pUserData);
+
 public:
+	bool m_WeaponsGot;
 	int m_KillCount;
 
 	void Votekick(const char *pName, const char *pReason);
@@ -114,10 +119,6 @@ public:
 
 	void GoresMode();
 
-	void GoresModeSave();
-	void GoresModeRestore();
-	void ToggleGoresMode(bool Value);
-
 	int64_t m_JoinTeam;
 	void AutoJoinTeam();
 	void OnConnect();
@@ -131,6 +132,13 @@ public:
 
 	bool m_FirstLaunch = false;
 
+	void SetDDNetProcessPriority(bool Set);
+	std::atomic<int64_t> m_DiscordPriorityDelay{0};
+	std::atomic_bool m_DiscordPriorityThreadRunning{false};
+	void *m_pDiscordPriorityThread = nullptr;
+	void StartDiscordPriorityThread();
+	void SetDiscordProcessesNormalPriority();
+
 private:
 	int Sizeof() const override { return sizeof(*this); }
 	void OnInit() override;
@@ -139,6 +147,7 @@ private:
 	void OnNewSnapshot() override;
 	void OnShutdown() override;
 	void OnSelfDeath() override;
+	void OnFocusChange(bool IsFocused) override;
 };
 
 #endif // GAME_CLIENT_COMPONENTS_ENTITY_ENTITY_H

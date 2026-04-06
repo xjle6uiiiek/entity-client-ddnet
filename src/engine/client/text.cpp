@@ -425,7 +425,7 @@ private:
 
 	FT_UInt GetCharGlyph(int Chr, FT_Face *pFace, bool AllowReplacementCharacter)
 	{
-		// E-Client: 0xE0073 is '󠁳', which doesn't get rendered if Noto Emoji is used as fallback font
+		// EClient: 0xE0073 is '󠁳', which doesn't get rendered if Noto Emoji is used as fallback font
 		if(Chr == 0xe0073)
 			Chr = REPLACEMENT_CHARACTER;
 
@@ -2571,6 +2571,43 @@ public:
 			else
 				TextEx(pCursor, SegStart, p - SegStart);
 		}
+	}
+
+	std::string RemoveColorCodes(const char *pText) override
+	{
+		std::string Result;
+		if(!pText)
+			return Result;
+
+		const char *p = pText;
+		while(*p)
+		{
+			if(*p == '&' && *(p + 1))
+			{
+				if(*(p + 1) == 'x')
+				{
+					p += 2;
+				}
+				else if(isdigit(p[1]) && isdigit(p[2]))
+				{
+					int CodeLength = 2;
+					if(isdigit(p[3]))
+						CodeLength = 3;
+					p += 1 + CodeLength; // & + code length
+				}
+				else
+				{
+					Result += *p;
+					++p;
+				}
+			}
+			else
+			{
+				Result += *p;
+				++p;
+			}
+		}
+		return Result;
 	}
 };
 

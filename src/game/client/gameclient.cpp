@@ -75,6 +75,7 @@
 #include <game/client/projectile_data.h>
 #include <game/localization.h>
 #include <game/mapitems.h>
+#include <game/teamscore.h>
 #include <game/version.h>
 
 #include <chrono>
@@ -139,7 +140,8 @@ void CGameClient::OnConsoleInit()
 					      &m_Particles.m_RenderTrail,
 					      &m_Particles.m_RenderTrailExtra,
 					      &m_Items,
-					      &m_Trails,
+					      &m_Trails, // TClient
+					      &m_Translate, // TClient
 					      &m_Ghost,
 					      &m_Players,
 					      &m_PhysicBalls, // EClient
@@ -183,10 +185,9 @@ void CGameClient::OnConsoleInit()
 					      &m_KeyBinder,
 					      &m_GameConsole,
 					      &m_MenuBackground,
-					      // E-Client
-					      &m_EClient,
-					      &m_AntiSpawnBlock,
-					      &m_EntityInfo,
+					      &m_EClient, // EClient
+					      &m_AntiSpawnBlock, // EClient
+					      &m_EntityInfo, // EClient
 				      });
 
 	// build the input stack
@@ -871,6 +872,16 @@ void CGameClient::OnRender()
 	// render all systems
 	for(auto &pComponent : m_vpAll)
 		pComponent->OnRender();
+	IEngineGraphics *pGraphics = ((IEngineGraphics *)Kernel()->RequestInterface<IEngineGraphics>());
+	if(pGraphics)
+	{
+		if(m_WasWindowActive != pGraphics->WindowActive())
+		{
+			for(auto &pComponent : m_vpAll)
+				pComponent->OnFocusChange(pGraphics->WindowActive());
+			m_WasWindowActive = pGraphics->WindowActive();
+		}
+	}
 
 	// clear all events/input for this frame
 	Input()->Clear();
@@ -1171,7 +1182,7 @@ void CGameClient::OnMessage(int MsgId, CUnpacker *pUnpacker, int Conn, bool Dumm
 		for(i = 0; i < MAX_CLIENTS; i++)
 		{
 			const int Team = pUnpacker->GetInt();
-			if(!pUnpacker->Error() && Team >= TEAM_FLOCK && Team <= TEAM_SUPER)
+			if(!pUnpacker->Error() && Team >= TEAM_FLOCK && Team < NUM_DDRACE_TEAMS)
 				m_Teams.Team(i, Team);
 			else
 			{
@@ -2044,7 +2055,9 @@ void CGameClient::OnNewSnapshot()
 					continue;
 				}
 				const CNetObj_SwitchState *pSwitchStateData = (const CNetObj_SwitchState *)Item.m_pData;
-				int Team = std::clamp(Item.m_Id, (int)TEAM_FLOCK, (int)TEAM_SUPER - 1);
+				// TODO: use NUM_DDRACE_TEAMS-1 instead of hardcoding 63
+				//       once https://github.com/ddnet/ddnet/pull/11232 is resolved
+				int Team = std::clamp(Item.m_Id, (int)TEAM_FLOCK, 63);
 
 				int HighestSwitchNumber = std::clamp(pSwitchStateData->m_HighestSwitchNumber, 0, 255);
 				if(HighestSwitchNumber != maximum(0, (int)Switchers().size() - 1))
@@ -2203,7 +2216,7 @@ void CGameClient::OnNewSnapshot()
 
 	// sort player infos by DDRace Team (and score between)
 	int Index = 0;
-	for(int Team = TEAM_FLOCK; Team <= TEAM_SUPER; ++Team)
+	for(int Team = TEAM_FLOCK; Team < NUM_DDRACE_TEAMS; ++Team)
 	{
 		for(int i = 0; i < MAX_CLIENTS && Index < MAX_CLIENTS; ++i)
 		{
@@ -2214,7 +2227,7 @@ void CGameClient::OnNewSnapshot()
 
 	// sort player infos by DDRace Team (and name between)
 	Index = 0;
-	for(int Team = TEAM_FLOCK; Team <= TEAM_SUPER; ++Team)
+	for(int Team = TEAM_FLOCK; Team < NUM_DDRACE_TEAMS; ++Team)
 	{
 		for(int i = 0; i < MAX_CLIENTS && Index < MAX_CLIENTS; ++i)
 		{
@@ -3896,13 +3909,13 @@ void CGameClient::UpdateLocalTuning()
 				m_aExpectingTuningForZone[g_Config.m_ClDummy] = -1;
 				m_aExpectingTuningSince[g_Config.m_ClDummy] = 0;
 				m_aReceivedTuning[g_Config.m_ClDummy] = false;
-				dbg_msg("tunezone", "the tuning was missed");
+				log_debug("tunezone", "the tuning was missed");
 			}
 			else
 			{
 				// if we are expecting tuning and have not received one yet.
 				// do not update any tuning, so we don't apply it to the wrong tunezone.
-				dbg_msg("tunezone", "waiting for tuning for zone %d", m_aExpectingTuningForZone[g_Config.m_ClDummy]);
+				log_debug("tunezone", "waiting for tuning for zone %d", m_aExpectingTuningForZone[g_Config.m_ClDummy]);
 				m_aExpectingTuningSince[g_Config.m_ClDummy]++;
 			}
 		}
@@ -5437,6 +5450,10 @@ void CGameClient::SnapCollectEntities()
 			vItemEx.push_back({Item, nullptr});
 		else if(Item.m_Type == NETOBJTYPE_PICKUP || Item.m_Type == NETOBJTYPE_DDNETPICKUP || Item.m_Type == NETOBJTYPE_LASER || Item.m_Type == NETOBJTYPE_DDNETLASER || Item.m_Type == NETOBJTYPE_PROJECTILE || Item.m_Type == NETOBJTYPE_DDRACEPROJECTILE || Item.m_Type == NETOBJTYPE_DDNETPROJECTILE)
 			vItemData.push_back({Item, nullptr});
+		// <FoxNet
+		else if(Item.m_Type == NETOBJTYPE_COSMETICPICKUP || Item.m_Type == NETOBJTYPE_COSMETICLASER || Item.m_Type == NETOBJTYPE_COSMETICPROJECTILE)
+			vItemData.push_back({Item, nullptr});
+		// FoxNet>
 	}
 
 	// sort by id
@@ -5909,7 +5926,7 @@ void CGameClient::StoreSave(const char *pTeamMembers, const char *pGeneratedCode
 	io_close(File);
 }
 
-// E-Client | TClient
+// EClient | TClient
 void CGameClient::SetConnectInfo(const NETADDR *pAddress)
 {
 	m_ConnectServerInfo = std::nullopt;

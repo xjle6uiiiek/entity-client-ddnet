@@ -57,6 +57,9 @@ public:
 
 	bool DoLine_RadioMenu(CUIRect &View, const char *pLabel, std::vector<CButtonContainer> &vButtonContainers, const std::vector<const char *> &vLabels, const std::vector<int> &vValues, int &Value);
 
+	// EClient
+	bool DoLine_RadioMenu_Compact(CUIRect &View, const char *pLabel, std::vector<CButtonContainer> &vButtonContainers, const std::vector<const char *> &vLabels, const std::vector<int> &vValues, int &Value, float LabelSpacing = 5.0f, const std::vector<const char *> *pvTooltips = nullptr);
+
 private:
 	CUi::SColorPickerPopupContext m_ColorPickerPopupContext;
 	ColorHSLA DoLine_ColorPicker(CButtonContainer *pResetId, float LineSize, float LabelSize, float BottomMargin, CUIRect *pMainRect, const char *pText, unsigned int *pColorValue, ColorRGBA DefaultColor, bool CheckBoxSpacing = true, int *pCheckBoxValue = nullptr, bool Alpha = false);
@@ -314,10 +317,10 @@ protected:
 
 		bool operator<(const CDemoItem &Other) const
 		{
-			if(!str_comp(m_aFilename, ".."))
-				return true;
 			if(!str_comp(Other.m_aFilename, ".."))
 				return false;
+			if(!str_comp(m_aFilename, ".."))
+				return true;
 			if(m_IsDir && !Other.m_IsDir)
 				return true;
 			if(!m_IsDir && Other.m_IsDir)
@@ -612,10 +615,10 @@ protected:
 
 	static bool CompareFilenameAscending(const CMapListItem Lhs, const CMapListItem Rhs)
 	{
-		if(str_comp(Lhs.m_aFilename, "..") == 0)
-			return true;
 		if(str_comp(Rhs.m_aFilename, "..") == 0)
 			return false;
+		if(str_comp(Lhs.m_aFilename, "..") == 0)
+			return true;
 		if(Lhs.m_IsDirectory != Rhs.m_IsDirectory)
 			return Lhs.m_IsDirectory;
 		return str_comp_filenames(Lhs.m_aFilename, Rhs.m_aFilename) < 0;
@@ -844,7 +847,7 @@ private:
 
 	bool RenderHslaScrollbars(CUIRect *pRect, unsigned int *pColor, bool Alpha, float DarkestLight, bool Preview = true);
 
-	// E-Client
+	// EClient
 	void RenderChatPreview(CUIRect MainView);
 	void RenderSettingsEntity(CUIRect MainView);
 	void RenderSettingsEClient(CUIRect MainView);
@@ -932,7 +935,9 @@ private:
 		}
 	};
 
+	void ServerBrowserUpdate();
 	std::vector<CWarlistCache> m_vWarlistCache;
+	bool m_WarlistCacheDirty = true;
 	const CWarlistCache *m_pRemoveEntry = nullptr;
 
 	int GetWartypePlayerCount(const CWarType *pWarType) const

@@ -1,4 +1,4 @@
-﻿/* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
+/* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
 
 #include "client.h"
@@ -105,7 +105,7 @@ CClient::CClient() :
 	for(auto &SnapshotStorage : m_aSnapshotStorage)
 		SnapshotStorage.Init();
 	mem_zero(m_aDemorecSnapshotHolders, sizeof(m_aDemorecSnapshotHolders));
-	mem_zero(&m_CurrentServerInfo, sizeof(m_CurrentServerInfo));
+	m_CurrentServerInfo = {};
 	mem_zero(&m_Checksum, sizeof(m_Checksum));
 	for(auto &GameTime : m_aGameTime)
 		GameTime.Init(0);
@@ -219,6 +219,12 @@ void CClient::SendqxdInfo(int Conn)
 	SendMsg(Conn, &Msg, MSGFLAG_VITAL);
 }
 
+void CClient::SendSupportsCosmeticSnapInfo(int Conn)
+{
+	CMsgPacker Msg(NETMSG_FOXNET_COSMETIC_SNAPS, true);
+	SendMsg(Conn, &Msg, MSGFLAG_VITAL);
+}
+
 void CClient::SendFastInputsInfo(int Conn)
 {
 	CMsgPacker Msg(NETMSG_FOXNET_FASTINPUTS, true);
@@ -229,7 +235,7 @@ void CClient::SendFastInputsInfo(int Conn)
 
 void CClient::SendInfo(int Conn)
 {
-	SendqxdInfo(Conn); // E-Client
+	SendqxdInfo(Conn); // EClient
 
 	CMsgPacker MsgVer(NETMSG_CLIENTVER, true);
 	MsgVer.AddRaw(&m_ConnectionId, sizeof(m_ConnectionId));
@@ -257,6 +263,10 @@ void CClient::SendEnterGame(int Conn)
 {
 	CMsgPacker Msg(NETMSG_ENTERGAME, true);
 	SendMsg(Conn, &Msg, MSGFLAG_VITAL | MSGFLAG_FLUSH);
+
+	// <FoxNet
+	SendSupportsCosmeticSnapInfo(Conn);
+	// FoxNet>
 }
 
 void CClient::SendReady(int Conn)
@@ -805,7 +815,7 @@ void CClient::DisconnectWithReason(const char *pReason)
 	ResetMapDownload(true);
 
 	// clear the current server info
-	mem_zero(&m_CurrentServerInfo, sizeof(m_CurrentServerInfo));
+	m_CurrentServerInfo = {};
 
 	// clear snapshots
 	m_aapSnapshots[0][SNAP_CURRENT] = nullptr;
@@ -921,7 +931,7 @@ void CClient::GetServerInfo(CServerInfo *pServerInfo) const
 
 void CClient::ServerInfoRequest()
 {
-	mem_zero(&m_CurrentServerInfo, sizeof(m_CurrentServerInfo));
+	m_CurrentServerInfo = {};
 	m_CurrentServerInfoRequestTime = 0;
 }
 
@@ -2382,15 +2392,16 @@ void CClient::ProcessServerPacket(CNetChunk *pPacket, int Conn, bool Dummy)
 			m_ExpectedMaplistEntries = -1;
 		}
 		// <FoxNet
-		else if(Conn == CONN_MAIN && (pPacket->m_Flags & NET_CHUNKFLAG_VITAL) != 0 && Msg == NETMSG_FOXNET_INFO)
+		else if((pPacket->m_Flags & NET_CHUNKFLAG_VITAL) != 0 && Msg == NETMSG_FOXNET_INFO)
 		{
 			const int Version = Unpacker.GetInt();
 			if(Unpacker.Error() || Version < 0)
 				return;
 			log_info("foxnet", "server is running FoxNet version %d", Version);
 			m_FoxNetVersion = Version;
-			SendFastInputsInfo(CONN_MAIN);
+			SendFastInputsInfo(Conn);
 		}
+		// FoxNet>
 	}
 	// the client handles only vital messages https://github.com/ddnet/ddnet/issues/11178
 	else if((pPacket->m_Flags & NET_CHUNKFLAG_VITAL) != 0 || Msg == NETMSGTYPE_SV_PREINPUT)
@@ -2423,6 +2434,15 @@ int CClient::UnpackAndValidateSnapshot(CSnapshot *pFrom, CSnapshot *pTo)
 		const void *pData = pFromItem->Data();
 		Unpacker.Reset(pData, FromItemSize);
 
+		if(ItemType <= 0)
+		{
+			// Don't add extended item type descriptions, they get
+			// added implicitly (== 0).
+			//
+			// Don't add items of unknown item types either (< 0).
+			continue;
+		}
+
 		void *pRawObj = pNetObjHandler->SecureUnpackObj(ItemType, &Unpacker);
 		if(!pRawObj)
 		{
@@ -2436,7 +2456,7 @@ int CClient::UnpackAndValidateSnapshot(CSnapshot *pFrom, CSnapshot *pTo)
 		}
 		const int ItemSize = pNetObjHandler->GetUnpackedObjSize(ItemType);
 
-		void *pObj = Builder.NewItem(pFromItem->Type(), pFromItem->Id(), ItemSize);
+		void *pObj = Builder.NewItem(ItemType, pFromItem->Id(), ItemSize);
 		if(!pObj)
 			return -4;
 
@@ -3039,7 +3059,7 @@ void CClient::Update()
 			}
 
 			ResetDDNetInfoTask();
-			GameClient()->OnServerBrowserRefresh(); // E-Client
+			GameClient()->OnServerBrowserRefresh(); // EClient
 		}
 		else if(m_pDDNetInfoTask->State() == EHttpState::ERROR || m_pDDNetInfoTask->State() == EHttpState::ABORTED)
 		{
@@ -4097,7 +4117,7 @@ const char *CClient::DemoPlayer_Play(const char *pFilename, int StorageType)
 	}
 
 	// setup current server info
-	mem_zero(&m_CurrentServerInfo, sizeof(m_CurrentServerInfo));
+	m_CurrentServerInfo = {};
 	str_copy(m_CurrentServerInfo.m_aMap, pMapInfo->m_aName);
 	m_CurrentServerInfo.m_MapCrc = pMapInfo->m_Crc;
 	m_CurrentServerInfo.m_MapSize = pMapInfo->m_Size;
@@ -4308,7 +4328,6 @@ void CClient::UpdateAndSwap()
 void CClient::ServerBrowserUpdate()
 {
 	m_ServerBrowser.RequestResort();
-	GameClient()->OnServerBrowserRefresh(); // E-Client
 }
 
 void CClient::ConchainServerBrowserUpdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData)
@@ -4666,7 +4685,7 @@ void CClient::RegisterCommands()
 	m_pConsole->Chain("loglevel", ConchainLoglevel, this);
 	m_pConsole->Chain("stdout_output_level", ConchainStdoutOutputLevel, this);
 
-	// E-Client
+	// EClient
 	m_pConsole->Register("discord_rpc_reload", "", CFGFLAG_CLIENT, ConDiscordRPCchange, this, "Reloads The Discord RPC");
 }
 
@@ -5012,11 +5031,20 @@ try
 	pFutureAssertionLogger->Set(CreateAssertionLogger(pStorage, GAME_NAME));
 
 	{
-		char aBufPath[IO_MAX_PATH_LENGTH];
+		char aTimestamp[20];
+		str_timestamp(aTimestamp, sizeof(aTimestamp));
+
 		char aBufName[IO_MAX_PATH_LENGTH];
-		char aDate[64];
-		str_timestamp(aDate, sizeof(aDate));
-		str_format(aBufName, sizeof(aBufName), "dumps/" GAME_NAME "_%s_crash_log_%s_%d_%s.RTP", CONF_PLATFORM_STRING, aDate, process_id(), GIT_SHORTREV_HASH != nullptr ? GIT_SHORTREV_HASH : "");
+		str_format(aBufName, sizeof(aBufName), "dumps/%s_%s_%s_%s_crash_log_%s_%d_%s.RTP",
+			GAME_NAME,
+			GAME_RELEASE_VERSION,
+			CONF_PLATFORM_STRING,
+			CONF_ARCH_STRING,
+			aTimestamp,
+			process_id(),
+			GIT_SHORTREV_HASH != nullptr ? GIT_SHORTREV_HASH : "");
+
+		char aBufPath[IO_MAX_PATH_LENGTH];
 		pStorage->GetCompletePath(IStorage::TYPE_SAVE, aBufName, aBufPath, sizeof(aBufPath));
 		crashdump_init_if_available(aBufPath);
 	}
