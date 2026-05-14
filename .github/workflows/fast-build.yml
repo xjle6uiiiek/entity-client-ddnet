@@ -60,6 +60,7 @@ jobs:
         rustup default stable
         rustup update
         rustup target add x86_64-apple-darwin aarch64-apple-darwin
+        echo "$(dirname \"$(rustup which cargo)\")" >> $GITHUB_PATH
 
     - name: Add rust for Windows 32
       if: contains(matrix.cmake-args, '-A Win32')

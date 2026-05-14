@@ -503,6 +503,7 @@ void CEffects::OnRender()
 	UpdateClock(m_Add50hz, m_LastUpdate50hz, 50);
 	UpdateClock(m_Add100hz, m_LastUpdate100hz, 100);
 
+	static int64_t s_LastUpdate = 0;
 	if(time() - s_LastUpdate > time_freq() / (g_Config.m_ClEffectSpeed * Speed))
 	{
 		m_AddXhz = true;

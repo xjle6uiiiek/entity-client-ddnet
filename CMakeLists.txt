@@ -2902,6 +2902,11 @@ if(CLIENT)
 
     ${PLATFORM_CLIENT_LIBS}
     ${LIBS}
+
+    # EClient
+    
+    ${DBUS_LIBRARIES}
+    ${PULSEAUDIO_LIBRARIES}
   )
 
   if(DISCORD)
@@ -2972,6 +2977,14 @@ if(CLIENT)
     target_link_options(game-client PRIVATE /ENTRY:mainCRTStartup)
   endif()
 
+  if(WIN32 AND NOT MSVC)
+    target_compile_options(game-client PRIVATE -Wa,-mbig-obj) # EClient, required for ChaiScript
+  endif()
+
+  # Silence warnings from ChaiScript
+  target_include_directories(game-client SYSTEM PRIVATE
+    ${PROJECT_SOURCE_DIR}/src/engine/external/chaiscript)
+
   target_include_directories(game-client SYSTEM PRIVATE
     # tidy-alphabetical-start
     ${DISCORDSDK_INCLUDE_DIRS}
@@ -2983,14 +2996,16 @@ if(CLIENT)
     ${OPUS_INCLUDE_DIRS}
     ${PNG_INCLUDE_DIRS}
     ${SDL2_INCLUDE_DIRS}
-    ${DBUS_INCLUDE_DIRS}
-    ${PULSEAUDIO_INCLUDE_DIRS}
     ${WAVPACK_INCLUDE_DIRS}
     # tidy-alphabetical-end
 
     ${VULKAN_INCLUDE_DIRS}
 
     ${PLATFORM_CLIENT_INCLUDE_DIRS}
+
+    # EClient
+    ${PULSEAUDIO_INCLUDE_DIRS}
+    ${DBUS_INCLUDE_DIRS}
   )
 
   if(STEAMAPI_KIND STREQUAL SHARED OR DISCORD_DYNAMIC)
