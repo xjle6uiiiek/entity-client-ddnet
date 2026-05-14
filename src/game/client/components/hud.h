@@ -294,8 +294,6 @@ public:
 	vec2 IslandPos() const { return m_Island.m_Rect.m_Pos; }
 	vec2 IslandSize() const { return m_Island.m_Rect.m_Size; }
 	vec2 FpsPos() const { return m_FPSPos; }
-
-	vec2 m_CursorPos = vec2(0, 0);
 };
 
 #endif

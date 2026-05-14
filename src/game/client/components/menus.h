@@ -967,17 +967,18 @@ public:
 
 	int m_MenusRainbowColor;
 
-	/*
-	 *
-	 * If Draggable = 1 the Tee can be dragged to anywhere on the screen
-	 * If 2 its limited to the size of the big menu
-	 * If 3 its limited to the size of the settings menu (ToDo)
-	 *
-	 */
 	vec2 TeeEyeDirection(vec2 Pos);
 
 	void RenderDraggableTee(CUIRect MainView, vec2 SpawnPos, vec2 TeeDirection, const CAnimState *pAnim, CTeeRenderInfo *pInfo, int EyeEmote, bool HappyHover = true);
 	void RenderTee(vec2 Pos, vec2 TeeDirection, const CAnimState *pAnim, CTeeRenderInfo *pInfo, int EyeEmote, bool HappyHover = true);
 	bool m_ResetTeePos;
+
+	// EClient
+	// found in menus_demo.cpp
+	// Copy of demo actions rect
+	CUIRect m_DemoControlsRect;
+
+	int GetPopup() const { return m_Popup; }
+	bool IsMenuActive() const { return m_MenuActive; }
 };
 #endif

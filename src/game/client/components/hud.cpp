@@ -59,7 +59,6 @@ CHud::CHud()
 
 	// EClient
 	m_Island.Reset();
-	m_CursorPos = vec2(0, 0);
 }
 
 void CHud::ResetHudContainers()
@@ -88,7 +87,6 @@ void CHud::ResetHudContainers()
 
 	// EClient
 	m_Island.Reset();
-	m_CursorPos = vec2(0, 0);
 }
 
 void CHud::OnWindowResize()
@@ -2522,7 +2520,15 @@ void CHud::RenderIsland()
 			return vec2(0.0f, 0.0f);
 		return vec2(UiPos.x / pUiScreen->w * m_Width, UiPos.y / pUiScreen->h * m_Height);
 	};
-	if(GameClient()->m_Chat.IsActive())
+	if(Client()->State() == IClient::STATE_DEMOPLAYBACK)
+	{
+		if(GameClient()->m_Menus.IsMenuActive() && !GameClient()->m_Menus.m_DemoControlsRect.Inside(Ui()->MousePos()) && GameClient()->m_Menus.GetPopup() == GameClient()->m_Menus.POPUP_NONE)
+		{
+			MousePos = ToHudSpaceFromUi(Ui()->MousePos());
+			HasMousePos = true;
+		}
+	}
+	else if(GameClient()->m_Chat.IsActive())
 	{
 		const vec2 WindowSize((float)Graphics()->WindowWidth(), (float)Graphics()->WindowHeight());
 		if(WindowSize.x > 0.0f && WindowSize.y > 0.0f)
