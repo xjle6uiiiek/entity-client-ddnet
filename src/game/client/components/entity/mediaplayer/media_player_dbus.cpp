@@ -1165,7 +1165,6 @@ void CMediaViewer::AudioThreadMain()
 				break;
 			}
 
-			(void)TimedOut;
 			std::this_thread::sleep_for(std::chrono::milliseconds(250));
 		}
 

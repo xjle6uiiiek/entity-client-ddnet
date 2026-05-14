@@ -16,6 +16,7 @@
 #include <game/client/components/binds.h>
 #include <game/client/components/chat.h>
 #include <game/client/components/countryflags.h>
+#include <game/client/components/entity/mediaplayer/media_player_impl.h>
 #include <game/client/components/menus.h>
 #include <game/client/components/skins.h>
 #include <game/client/components/tclient/statusbar.h>
@@ -3735,6 +3736,51 @@ void CMenus::RenderSettingsVisual(CUIRect MainView)
 		},
 	});
 
+#if MEDIA_PLAYER_WINRT || MEDIA_PLAYER_DBUS
+	/* Media Island */
+	vModules.push_back({
+		ESettingsModuleColumn::RIGHT,
+		{"media", "music", "island", "visualizer", "size", "alignment", "bottom", "center"},
+		[](bool HasSearch) {
+			int Offset = 0;
+
+			if(g_Config.m_ClMediaIslandVisualizer || HasSearch)
+				Offset += LineSize;
+
+			return 105.0f + Offset;
+		},
+		[&](CUIRect ModuleRect, bool HasSearch) {
+			ModuleRect.Draw(BackgroundColor, IGraphics::CORNER_ALL, CornerRoundness);
+			ModuleRect.VMargin(Margin, &ModuleRect);
+
+			ModuleRect.HSplitTop(HeaderHeight, &Button, &ModuleRect);
+			Ui()->DoLabel(&Button, EcLocalize("Media Island"), HeaderSize, HeaderAlignment);
+			{
+				DoButton_CheckBoxAutoVMarginAndSet(&g_Config.m_ClMediaIsland, "Enable media island", &g_Config.m_ClMediaIsland, &ModuleRect, LineSize);
+				ModuleRect.HSplitTop(LineSize, &Button, &ModuleRect);
+				Ui()->DoScrollbarOption(&g_Config.m_ClMediaIslandSize, &g_Config.m_ClMediaIslandSize, &Button, "Island Size", 0, 10, &CUi::ms_LinearScrollbarScale, 0u, "");
+				
+				//ModuleRect.HSplitTop(LineSize, &Button, &ModuleRect);
+				//Ui()->DoScrollbarOption(&g_Config.m_ClMediaIslandAnimation, &g_Config.m_ClMediaIslandAnimation, &Button, "Animation Time", 0, 300, &CUi::ms_LinearScrollbarScale, 0u, "");
+				//GameClient()->m_Tooltips.DoToolTip(&g_Config.m_ClMediaIslandAnimation, &Button, "Time it takes for the Islands animation, lower = slower", FontSize);
+
+				ModuleRect.HSplitTop(5.0f, &Button, &ModuleRect);
+				DoButton_CheckBoxAutoVMarginAndSet(&g_Config.m_ClMediaIslandVisualizer, "Show Visualizer", &g_Config.m_ClMediaIslandVisualizer, &ModuleRect, LineSize);
+				
+				if(g_Config.m_ClMediaIslandVisualizer || HasSearch)
+				{
+					static std::vector<CButtonContainer> s_vButtonContainers = {{}, {}};
+					int Value = g_Config.m_ClMediaIslandVisualizerAlignment;
+					if(DoLine_RadioMenu(ModuleRect, EcLocalize("Visualizer Alignment:"), s_vButtonContainers, {"Bottom", "Center"}, {1, 2}, Value))
+					{
+						g_Config.m_ClMediaIslandVisualizerAlignment = Value;
+					}
+				}
+			}
+		},
+	});
+#endif
+
 	/* Map Overview */
 	vModules.push_back({
 		ESettingsModuleColumn::RIGHT,
@@ -3758,8 +3804,8 @@ void CMenus::RenderSettingsVisual(CUIRect MainView)
 		},
 	});
 
-	/* Discord RPC */
 #if defined(CONF_DISCORD)
+	/* Discord RPC */
 	vModules.push_back({
 		ESettingsModuleColumn::RIGHT,
 		{"discord", "rpc", "rich", "presence", "offline", "online", "message"},
