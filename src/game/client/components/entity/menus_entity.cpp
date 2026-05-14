@@ -2752,6 +2752,7 @@ void CMenus::RenderSettingsEClient(CUIRect MainView)
 	});
 
 	/* Performance */
+#if defined(CONF_FAMILY_WINDOWS)
 	vModules.push_back({
 		ESettingsModuleColumn::RIGHT,
 		{"performance", "high", "lower", "process", "discord", "priority", "ddnet"},
@@ -2775,6 +2776,7 @@ void CMenus::RenderSettingsEClient(CUIRect MainView)
 			}
 		},
 	});
+#endif
 
 	/* Gores Mode */
 	vModules.push_back({
