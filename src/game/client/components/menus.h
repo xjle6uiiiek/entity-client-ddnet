@@ -32,6 +32,49 @@
 #include <deque>
 #include <optional>
 #include <vector>
+
+// EClient
+enum class ESettingsModuleColumn
+{
+	LEFT,
+	RIGHT,
+};
+
+struct CSettingsModule
+{
+	ESettingsModuleColumn m_Column = ESettingsModuleColumn::LEFT;
+	float m_TopMargin = 0.0f;
+	std::vector<std::string_view> m_vSearchTerms;
+	std::function<float(bool)> m_GetHeight;
+	std::function<void(CUIRect, bool)> m_Render;
+
+	CSettingsModule(ESettingsModuleColumn Column, float TopMargin, std::function<float(bool)> GetHeight, std::function<void(CUIRect, bool)> Render) :
+		m_Column(Column),
+		m_TopMargin(TopMargin),
+		m_GetHeight(std::move(GetHeight)),
+		m_Render(std::move(Render))
+	{
+	}
+
+	CSettingsModule(ESettingsModuleColumn Column, std::vector<std::string_view> vSearchTerms, std::function<float(bool)> GetHeight, std::function<void(CUIRect, bool)> Render, float TopMargin = 0.0f) :
+		m_Column(Column),
+		m_TopMargin(TopMargin),
+		m_vSearchTerms(std::move(vSearchTerms)),
+		m_GetHeight(std::move(GetHeight)),
+		m_Render(std::move(Render))
+	{
+	}
+
+	CSettingsModule(ESettingsModuleColumn Column, std::initializer_list<std::string_view> SearchTerms, std::function<float(bool)> GetHeight, std::function<void(CUIRect, bool)> Render, float TopMargin = 0.0f) :
+		m_Column(Column),
+		m_TopMargin(TopMargin),
+		m_vSearchTerms(SearchTerms),
+		m_GetHeight(std::move(GetHeight)),
+		m_Render(std::move(Render))
+	{
+	}
+};
+
 class CMenus : public CComponent
 {
 	static ColorRGBA ms_GuiColor;
@@ -952,6 +995,8 @@ private:
 	}
 
 	void RenderWarlistPlayers(CUIRect &View, CUIRect &List, CScrollRegion &ScrollRegion);
+	
+	void RenderSettingsModuleSearchBar(CScrollRegion &ScrollRegion, CUIRect &MainView, const std::vector<CSettingsModule> &vModules, CLineInputBuffered<32> &SearchInput);
 
 public:
 	int DoButtonLineSize_Menu(CButtonContainer *pButtonContainer, const char *pText, int Checked, const CUIRect *pRect, float LineSize, bool Fake = false, const char *pImageName = nullptr, int Corners = IGraphics::CORNER_ALL, float Rounding = 5.0f, float FontFactor = 0.0f, ColorRGBA Color = ColorRGBA(1.0f, 1.0f, 1.0f, 0.5f));
