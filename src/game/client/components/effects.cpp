@@ -492,15 +492,10 @@ void CEffects::SwitchEffect(vec2 Pos, ColorRGBA Color, float Alpha)
 
 void CEffects::OnRender()
 {
-	static int64_t s_LastUpdate = 0;
-
-	float Speed = 1.0f;
-	if(Client()->State() == IClient::STATE_DEMOPLAYBACK)
-		Speed = DemoPlayer()->BaseInfo()->m_Speed;
-
+	const float Speed = GameClient()->GetAnimationPlaybackSpeed();
 	const int64_t Now = time();
 	auto UpdateClock = [&](bool &Add, int64_t &LastUpdate, int Frequency) {
-		Add = Now - LastUpdate > time_freq() / ((float)Frequency * Speed);
+		Add = (Now - LastUpdate) / (float)time_freq() * Speed > 1.0f / Frequency;
 		if(Add)
 			LastUpdate = Now;
 	};
