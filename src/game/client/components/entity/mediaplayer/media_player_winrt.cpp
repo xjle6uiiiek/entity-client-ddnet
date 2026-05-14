@@ -41,6 +41,9 @@
 #include "media_player_impl.h"
 
 #if MEDIA_PLAYER_WINRT
+#define IStorage EngineIStorage
+#include <engine/shared/config.h>
+#undef IStorage
 #include <base/system.h>
 
 #include <algorithm>
@@ -286,6 +289,17 @@ void CMediaViewer::ThreadMain()
 		{
 			try
 			{
+				if(g_Config.m_ClMediaIsland == 0)
+				{
+					if(HasMedia)
+					{
+						ResetSharedState(m_pShared.get(), State, HasMedia, AlbumArtKey);
+						AlbumArtLoaded = false;
+					}
+					std::this_thread::sleep_for(std::chrono::seconds(1));
+					continue;
+				}
+
 				if(!Manager)
 				{
 					try

@@ -29,6 +29,8 @@
 
 #include "media_player_impl.h"
 
+#include <engine/shared/config.h>
+
 #if MEDIA_PLAYER_DBUS
 #include <base/log.h>
 #include <base/system.h>
@@ -901,6 +903,14 @@ void CMediaViewer::ThreadMain()
 	{
 		CPlainState State;
 		bool HasMedia = false;
+		if(g_Config.m_ClMediaIsland == 0)
+		{
+			PublishSharedState(m_pShared.get(), State, false);
+			ClearSharedAlbumArt(m_pShared.get());
+			std::this_thread::sleep_for(std::chrono::seconds(1));
+			continue;
+		}
+
 		const std::string Service = DBusChoosePlayer(pConnection);
 		if(!Service.empty())
 			HasMedia = DBusUpdatePlayerState(pConnection, Service, State);
@@ -979,13 +989,28 @@ void CMediaViewer::AudioThreadMain()
 #if !MEDIA_PLAYER_PULSEAUDIO
 	ClearAudioCapture(m_pAudioCapture.get());
 	while(!m_StopAudioThread.load(std::memory_order_relaxed))
+	{
+		if(g_Config.m_ClMediaIsland == 0)
+		{
+			ClearAudioCapture(m_pAudioCapture.get());
+			std::this_thread::sleep_for(std::chrono::seconds(1));
+			continue;
+		}
 		std::this_thread::sleep_for(std::chrono::milliseconds(250));
+	}
 	return;
 #else
 	ClearAudioCapture(m_pAudioCapture.get());
 
 	while(!m_StopAudioThread.load(std::memory_order_relaxed))
 	{
+		if(g_Config.m_ClMediaIsland == 0)
+		{
+			ClearAudioCapture(m_pAudioCapture.get());
+			std::this_thread::sleep_for(std::chrono::seconds(1));
+			continue;
+		}
+
 		pa_threaded_mainloop *pMainLoop = nullptr;
 		pa_context *pContext = nullptr;
 		pa_stream *pStream = nullptr;
