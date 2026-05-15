@@ -438,7 +438,15 @@ MACRO_CONFIG_INT(ClMediaIslandVisualizerAlignment, ec_media_island_visualizer_al
 MACRO_CONFIG_INT(ClMediaIslandVisualizerColorDynamic, ec_media_island_visualizer_color_dynamic, 1, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Enable dynamic color for media island visualizer")
 MACRO_CONFIG_COL(ClMediaIslandVisualizerColor, ec_media_island_visualizer_color, 10485663 /* Blue-ish */, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Color of the media island visualizer")
 
+// Force 0.7 Skin
 MACRO_CONFIG_INT(ClForceSevenSkin, ec_force_seven_skin, 0, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Whether to force rendering the 0.7 skin on any server for yourself")
+
+// Decouple mouse sensitivity
+MACRO_CONFIG_INT(ClDecoupleMouseSens, ec_decouple_mouse_sens, 0, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Whether to decouple mouse sensitivity")
+MACRO_CONFIG_INT(ClMouseSensXIngame, ec_mouse_sens_x_ingame, -1, 1, 100000, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Mouse sensitivity for X axis when decoupled")
+MACRO_CONFIG_INT(ClMouseSensYIngame, ec_mouse_sens_y_ingame, -1, 1, 100000, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Mouse sensitivity for Y axis when decoupled")
+MACRO_CONFIG_INT(ClMouseSensXUi, ec_mouse_sens_x_ui, -1, 1, 100000, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Mouse sensitivity for X axis when decoupled")
+MACRO_CONFIG_INT(ClMouseSensYUi, ec_mouse_sens_y_ui, -1, 1, 100000, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Mouse sensitivity for Y axis when decoupled")
 
 // Custom variables from my server for the editor
 // You can use these if you get my server from https://github.com/FoxNet-DDNet/FoxNet

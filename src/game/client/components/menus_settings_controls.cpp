@@ -560,21 +560,55 @@ void CMenusSettingsControls::RenderSettingsBinds(EBindOptionGroup Group, CUIRect
 
 float CMenusSettingsControls::MeasureSettingsMouseHeight() const
 {
-	return 2.0f * BUTTON_HEIGHT + BUTTON_SPACING;
+	float Size = 3.0 * BUTTON_HEIGHT + 2.0f * BUTTON_SPACING;
+	if(g_Config.m_ClDecoupleMouseSens)
+		Size = 5.0f * BUTTON_HEIGHT + 2.0f * BUTTON_SPACING;
+	return Size;
 }
 
 void CMenusSettingsControls::RenderSettingsMouse(CUIRect View)
 {
 	CUIRect Button;
 	View.HSplitTop(BUTTON_HEIGHT, &Button, &View);
-	Ui()->DoScrollbarOption(&g_Config.m_InpMousesens, &g_Config.m_InpMousesens, &Button, Localize("Ingame mouse sens."), 1, 500,
-		&CUi::ms_LogarithmicScrollbarScale, CUi::SCROLLBAR_OPTION_NOCLAMPVALUE);
 
+	if(GameClient()->m_Menus.DoButton_CheckBox(&g_Config.m_ClDecoupleMouseSens, Localize("Decouple mouse sens."), g_Config.m_ClDecoupleMouseSens, &Button))
+	{
+		g_Config.m_ClDecoupleMouseSens ^= 1;
+	}
 	View.HSplitTop(BUTTON_SPACING, nullptr, &View);
 
-	View.HSplitTop(BUTTON_HEIGHT, &Button, &View);
-	Ui()->DoScrollbarOption(&g_Config.m_UiMousesens, &g_Config.m_UiMousesens, &Button, Localize("UI mouse sens."), 1, 500,
-		&CUi::ms_LogarithmicScrollbarScale, CUi::SCROLLBAR_OPTION_NOCLAMPVALUE | CUi::SCROLLBAR_OPTION_DELAYUPDATE);
+	if(g_Config.m_ClDecoupleMouseSens)
+	{
+		View.HSplitTop(BUTTON_HEIGHT, &Button, &View);
+		Ui()->DoScrollbarOption(&g_Config.m_ClMouseSensXIngame, &g_Config.m_ClMouseSensXIngame, &Button, Localize("Ingame mouse sens. x"), 1, 500,
+			&CUi::ms_LogarithmicScrollbarScale, CUi::SCROLLBAR_OPTION_NOCLAMPVALUE);
+
+		View.HSplitTop(BUTTON_HEIGHT, &Button, &View);
+		Ui()->DoScrollbarOption(&g_Config.m_ClMouseSensYIngame, &g_Config.m_ClMouseSensYIngame, &Button, Localize("Ingame mouse sens. y"), 1, 500,
+			&CUi::ms_LogarithmicScrollbarScale, CUi::SCROLLBAR_OPTION_NOCLAMPVALUE);
+
+		View.HSplitTop(BUTTON_SPACING, nullptr, &View);
+
+		View.HSplitTop(BUTTON_HEIGHT, &Button, &View);
+		Ui()->DoScrollbarOption(&g_Config.m_ClMouseSensXUi, &g_Config.m_ClMouseSensXUi, &Button, Localize("UI mouse sens. x"), 1, 500,
+			&CUi::ms_LogarithmicScrollbarScale, CUi::SCROLLBAR_OPTION_NOCLAMPVALUE | CUi::SCROLLBAR_OPTION_DELAYUPDATE);
+
+		View.HSplitTop(BUTTON_HEIGHT, &Button, &View);
+		Ui()->DoScrollbarOption(&g_Config.m_ClMouseSensYUi, &g_Config.m_ClMouseSensYUi, &Button, Localize("UI mouse sens. y"), 1, 500,
+			&CUi::ms_LogarithmicScrollbarScale, CUi::SCROLLBAR_OPTION_NOCLAMPVALUE | CUi::SCROLLBAR_OPTION_DELAYUPDATE);
+	}
+	else
+	{
+		View.HSplitTop(BUTTON_HEIGHT, &Button, &View);
+		Ui()->DoScrollbarOption(&g_Config.m_InpMousesens, &g_Config.m_InpMousesens, &Button, Localize("Ingame mouse sens."), 1, 500,
+			&CUi::ms_LogarithmicScrollbarScale, CUi::SCROLLBAR_OPTION_NOCLAMPVALUE);
+
+		View.HSplitTop(BUTTON_SPACING, nullptr, &View);
+
+		View.HSplitTop(BUTTON_HEIGHT, &Button, &View);
+		Ui()->DoScrollbarOption(&g_Config.m_UiMousesens, &g_Config.m_UiMousesens, &Button, Localize("UI mouse sens."), 1, 500,
+			&CUi::ms_LogarithmicScrollbarScale, CUi::SCROLLBAR_OPTION_NOCLAMPVALUE | CUi::SCROLLBAR_OPTION_DELAYUPDATE);
+	}
 }
 
 float CMenusSettingsControls::MeasureSettingsJoystickHeight() const
@@ -777,6 +811,13 @@ void CMenusSettingsControls::RenderJoystickBar(const CUIRect *pRect, float Curre
 void CMenus::ResetSettingsControls()
 {
 	GameClient()->m_Binds.SetDefaults();
+
+	// EClient
+	g_Config.m_ClDecoupleMouseSens = 0;
+	g_Config.m_ClMouseSensXIngame = 200;
+	g_Config.m_ClMouseSensYIngame = 200;
+	g_Config.m_ClMouseSensXUi = 200;
+	g_Config.m_ClMouseSensYUi = 200;
 
 	g_Config.m_InpMousesens = 200;
 	g_Config.m_UiMousesens = 200;

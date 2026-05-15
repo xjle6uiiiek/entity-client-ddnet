@@ -1,4 +1,4 @@
-﻿#include "entity.h"
+#include "entity.h"
 
 #include <base/log.h>
 #include <base/math.h>
@@ -545,6 +545,17 @@ void CEClient::OnInit()
 	{
 		m_FirstLaunch = true;
 		g_Config.m_ClFirstLaunch = 0;
+	} 
+	
+	if(g_Config.m_ClMouseSensXIngame == -1 || g_Config.m_ClMouseSensYIngame == -1)
+	{
+		g_Config.m_ClMouseSensXIngame = g_Config.m_InpMousesens;
+		g_Config.m_ClMouseSensYIngame = g_Config.m_InpMousesens;
+	}
+	if(g_Config.m_ClMouseSensXUi == -1 || g_Config.m_ClMouseSensYUi == -1)
+	{
+		g_Config.m_ClMouseSensXUi = g_Config.m_UiMousesens;
+		g_Config.m_ClMouseSensYUi = g_Config.m_UiMousesens;
 	}
 }
 
