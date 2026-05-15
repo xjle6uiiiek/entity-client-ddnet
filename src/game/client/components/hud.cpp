@@ -2099,12 +2099,24 @@ void CHud::FreezeHelpers()
 		str_format(aBuf, sizeof(aBuf), "%d / %d", NumInTeam - NumFrozen, NumInTeam);
 	else if(g_Config.m_ClShowFrozenText == 2)
 		str_format(aBuf, sizeof(aBuf), "%d / %d", NumFrozen, NumInTeam);
-	if(g_Config.m_ClShowFrozenText > 0)
+	if(g_Config.m_ClShowFrozenText > 0 && !GameClient()->m_Scoreboard.IsActive())
 	{
-		const float FontSize = 10.0f;
+		const float FontSize = 8.0f;
 		const float TextWidth = TextRender()->TextWidth(FontSize, aBuf, -1, -1.0f);
-		const float TextY = 12.0f;
-		const float TextX = PlaceRightOfReserved(m_Width / 2 - TextWidth / 2, TextY, TextWidth, FontSize);
+		float TextY = 12.0f;
+		const float TextX = m_Width / 2 - TextWidth / 2;
+
+		const vec2 IslandPos = this->IslandPos();
+		const vec2 IslandSize = this->IslandSize();
+		if(IslandSize.x > 0.0f && IslandSize.y > 0.0f)
+		{
+			const bool OverlapsX = TextX < IslandPos.x + IslandSize.x && TextX + TextWidth > IslandPos.x;
+			const bool OverlapsY = TextY < IslandPos.y + IslandSize.y && TextY + FontSize > IslandPos.y;
+			if(OverlapsX && OverlapsY)
+			{
+				TextY = IslandPos.y + IslandSize.y + OverlapPadding;
+			}
+		}
 		TextRender()->Text(TextX, TextY, FontSize, aBuf, -1.0f);
 	}
 
@@ -2609,7 +2621,7 @@ void CHud::RenderIsland()
 	}
 
 	CUIRect IslandRect = {Island.m_Rect.m_Pos.x, Island.m_Rect.m_Pos.y, Island.m_Rect.m_Size.x, Island.m_Rect.m_Size.y};
-	IslandRect.Draw(ColorRGBA(0.0f, 0.0f, 0.0f, 0.4f), IGraphics::CORNER_ALL, Rounding);
+	IslandRect.Draw(color_cast<ColorRGBA>(ColorHSLA(g_Config.m_ClMediaIslandColor, true)), IGraphics::CORNER_ALL, Rounding);
 
 	CUIRect ContentRect;
 	IslandRect.Margin(Padding, &ContentRect);

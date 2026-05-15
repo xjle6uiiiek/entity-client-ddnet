@@ -313,11 +313,10 @@ void CUi::ConvertMouseMove(float *pX, float *pY, IInput::ECursorType CursorType)
 		dbg_assert_failed("CUi::ConvertMouseMove CursorType %d", (int)CursorType);
 	}
 
-
 	if(CursorType == IInput::CURSOR_MOUSE && g_Config.m_ClDecoupleMouseSens)
 	{
 		vec2 Sens = vec2(g_Config.m_ClMouseSensXUi, g_Config.m_ClMouseSensYUi) / 100.0f;
-		
+
 		if(m_MouseSlow)
 			Factor = 0.05f;
 

@@ -3778,7 +3778,7 @@ void CMenus::RenderSettingsVisual(CUIRect MainView)
 			if(g_Config.m_ClMediaIslandVisualizer || HasSearch)
 				Offset += LineSize;
 
-			return 105.0f + Offset;
+			return 135.0f + Offset;
 		},
 		[&](CUIRect ModuleRect, bool HasSearch) {
 			ModuleRect.Draw(BackgroundColor, IGraphics::CORNER_ALL, CornerRoundness);
@@ -3788,6 +3788,10 @@ void CMenus::RenderSettingsVisual(CUIRect MainView)
 			Ui()->DoLabel(&Button, EcLocalize("Media Island"), HeaderSize, HeaderAlignment);
 			{
 				DoButton_CheckBoxAutoVMarginAndSet(&g_Config.m_ClMediaIsland, "Enable media island", &g_Config.m_ClMediaIsland, &ModuleRect, LineSize);
+
+				static CButtonContainer s_IslandColor;
+				DoLine_ColorPicker(&s_IslandColor, ColorPickerLineSize, ColorPickerLabelSize, ColorPickerLineSpacing, &ModuleRect, EcLocalize("Island color"), &g_Config.m_ClMediaIslandColor, color_cast<ColorRGBA, ColorHSLA>(ColorHSLA(DefaultConfig::ClMediaIslandColor, true)), false, nullptr, true);
+
 				ModuleRect.HSplitTop(LineSize, &Button, &ModuleRect);
 				Ui()->DoScrollbarOption(&g_Config.m_ClMediaIslandSize, &g_Config.m_ClMediaIslandSize, &Button, "Island Size", 0, 10, &CUi::ms_LinearScrollbarScale, 0u, "");
 

@@ -545,8 +545,8 @@ void CEClient::OnInit()
 	{
 		m_FirstLaunch = true;
 		g_Config.m_ClFirstLaunch = 0;
-	} 
-	
+	}
+
 	if(g_Config.m_ClMouseSensXIngame == -1 || g_Config.m_ClMouseSensYIngame == -1)
 	{
 		g_Config.m_ClMouseSensXIngame = g_Config.m_InpMousesens;
