@@ -2110,9 +2110,9 @@ void CHud::FreezeHelpers()
 		const vec2 IslandSize = this->IslandSize();
 		if(IslandSize.x > 0.0f && IslandSize.y > 0.0f)
 		{
-			const bool OverlapsX = TextX < IslandPos.x + IslandSize.x && TextX + TextWidth > IslandPos.x;
-			const bool OverlapsY = TextY < IslandPos.y + IslandSize.y && TextY + FontSize > IslandPos.y;
-			if(OverlapsX && OverlapsY)
+			const bool OverlapX = TextX < IslandPos.x + IslandSize.x && TextX + TextWidth > IslandPos.x;
+			const bool OverlapY = TextY < IslandPos.y + IslandSize.y && TextY + FontSize > IslandPos.y;
+			if(OverlapX && OverlapY)
 			{
 				TextY = IslandPos.y + IslandSize.y + OverlapPadding;
 			}
