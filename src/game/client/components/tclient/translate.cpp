@@ -791,25 +791,33 @@ void CTranslate::OnRender()
 			return false; // Keep ongoing tasks
 		if(*Done)
 		{
+			const bool SameTextAsInput = str_comp_nocase(Job.m_pLine->m_aText, Job.m_pTranslateResponse->m_Text) == 0;
+			if(SameTextAsInput) // Check for no translation difference
+			{
+				Job.m_pTranslateResponse->m_Text[0] = '\0';
+				Job.m_pTranslateResponse->m_Language[0] = '\0';
+			}
+
+			const bool SameLanguageAsTarget = Job.m_pBackend->CompareTargets(Job.m_pTranslateResponse->m_Language, g_Config.m_EcTranslateTarget);
+			if(SameLanguageAsTarget && !SameTextAsInput)
+			{
+				// Keep successful translations even if backend source-language detection is wrong.
+				Job.m_pTranslateResponse->m_Language[0] = '\0';
+			}
+
 			if(Job.m_pTranslateResponse->m_Auto)
 			{
 				if(!HandleLanguageWhitelist(Job.m_pTranslateResponse->m_Language))
 				{
 					Job.m_pTranslateResponse->m_Text[0] = '\0';
+					Job.m_pTranslateResponse->m_Language[0] = '\0';
 				}
 
 				else if(HandleLanguageBlacklist(Job.m_pTranslateResponse->m_Language))
 				{
 					Job.m_pTranslateResponse->m_Text[0] = '\0';
+					Job.m_pTranslateResponse->m_Language[0] = '\0';
 				}
-			}
-			if(Job.m_pBackend->CompareTargets(Job.m_pTranslateResponse->m_Language, g_Config.m_EcTranslateTarget))
-			{
-				Job.m_pTranslateResponse->m_Text[0] = '\0';
-			}
-			else if(str_comp_nocase(Job.m_pLine->m_aText, Job.m_pTranslateResponse->m_Text) == 0) // Check for no translation difference
-			{
-				Job.m_pTranslateResponse->m_Text[0] = '\0';
 			}
 		}
 		else

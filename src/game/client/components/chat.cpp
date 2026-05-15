@@ -1289,6 +1289,8 @@ void CChat::OnPrepareLines(float y)
 					pTranslatedText = Line.m_pTranslateResponse->m_Text;
 					if(Line.m_pTranslateResponse->m_Language[0] != '\0')
 						pTranslatedLanguage = Line.m_pTranslateResponse->m_Language;
+					else
+						pTranslatedLanguage = "?";
 				}
 			}
 		}
