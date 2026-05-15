@@ -978,8 +978,8 @@ private:
 		CWarType *m_pWarType;
 		CWarEntry *m_pEntry;
 
-		CWarlistCache(CWarEntry *pEntry, const CServerInfo::CClient *pOnlineClient, const CServerInfo *pServer)
-			: CGenericPlayerInfo(pOnlineClient, pServer)
+		CWarlistCache(CWarEntry *pEntry, const CServerInfo::CClient *pOnlineClient, const CServerInfo *pServer) :
+			CGenericPlayerInfo(pOnlineClient, pServer)
 		{
 			m_pEntry = pEntry;
 			m_pWarType = pEntry->m_pWarType;

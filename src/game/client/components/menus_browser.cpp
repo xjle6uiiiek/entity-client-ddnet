@@ -2362,7 +2362,7 @@ void CMenus::RenderEntityClientUsers(CUIRect &View, CUIRect &List, CScrollRegion
 	TextRender()->TextColor(TextRender()->DefaultTextColor());
 	TextRender()->SetFontPreset(EFontPreset::DEFAULT_FONT);
 
-	str_format(aBuf, sizeof(aBuf), "Entity Users (%d)", m_vEntityUsersCache.size());
+	str_format(aBuf, sizeof(aBuf), "Entity Users (%" PRIzu ")", m_vEntityUsersCache.size());
 	Ui()->DoLabel(&Label, aBuf, FontSize, TEXTALIGN_ML);
 
 	// Toggle on click
