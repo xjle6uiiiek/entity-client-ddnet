@@ -2913,10 +2913,33 @@ void CMenus::RenderSettingsEClient(CUIRect MainView)
 		},
 	});
 
+	/* Anti Ping Smoothing */
+	vModules.push_back({
+		ESettingsModuleColumn::RIGHT,
+		{"anti", "ping", "smoothing", "new", "algorithm", "optimistic", "prediction", "stable", "direction", "remember", "instability", "longer", "uncertainty", "duration"},
+		[](bool HasSearch) {
+			return 120.0f;
+		},
+		[&](CUIRect ModuleRect, bool HasSearch) {
+			ModuleRect.Draw(BackgroundColor, IGraphics::CORNER_ALL, CornerRoundness);
+			ModuleRect.VMargin(Margin, &ModuleRect);
+
+			ModuleRect.HSplitTop(HeaderHeight, &Button, &ModuleRect);
+			Ui()->DoLabel(&Button, EcLocalize("Anti Ping Smoothing"), HeaderSize, HeaderAlignment);
+			{
+				DoButton_CheckBoxAutoVMarginAndSet(&g_Config.m_TcAntiPingImproved, EcLocalize("Use new smoothing algorithm"), &g_Config.m_TcAntiPingImproved, &ModuleRect, LineSize);
+				DoButton_CheckBoxAutoVMarginAndSet(&g_Config.m_TcAntiPingStableDirection, EcLocalize("Optimistic prediction in stable direction"), &g_Config.m_TcAntiPingStableDirection, &ModuleRect, LineSize);
+				DoButton_CheckBoxAutoVMarginAndSet(&g_Config.m_TcAntiPingNegativeBuffer, EcLocalize("Remember instability for longer"), &g_Config.m_TcAntiPingNegativeBuffer, &ModuleRect, LineSize);
+				ModuleRect.HSplitTop(LineSize, &Button, &ModuleRect);
+				Ui()->DoScrollbarOption(&g_Config.m_TcAntiPingUncertaintyScale, &g_Config.m_TcAntiPingUncertaintyScale, &Button, EcLocalize("Uncertainty duration"), 50, 400, &CUi::ms_LinearScrollbarScale, CUi::SCROLLBAR_OPTION_NOCLAMPVALUE, "%");
+			}
+		},
+	});
+
 	/* Menu Settings */
 	vModules.push_back({
 		ESettingsModuleColumn::RIGHT,
-		{"menu", "settings", "friend", "icon", "show", "others", "in", "menu", "spec"},
+		{"menu", "settings", "friend", "prefix", "icon", "show", "others", "in", "menu", "spec"},
 		[](bool HasSearch) {
 			return 100.0f;
 		},
@@ -2939,9 +2962,7 @@ void CMenus::RenderSettingsEClient(CUIRect MainView)
 	/* Freeze Kill */
 	vModules.push_back({
 		ESettingsModuleColumn::RIGHT,
-		{"freeze"
-		 "kill",
-			"protection", "not", "moving", "only", "full", "frozen", "team", "in", "view", "wait", "until", "milli"},
+		{"freeze", "kill", "protection", "not", "moving", "only", "full", "frozen", "team", "in", "view", "wait", "until", "milli"},
 		[](bool HasSearch) {
 			int Offset = 0;
 			if(g_Config.m_ClFreezeKill || HasSearch)
@@ -3017,29 +3038,6 @@ void CMenus::RenderSettingsEClient(CUIRect MainView)
 				{
 					Ui()->DoScrollbarOption(&g_Config.m_TcPredMarginInFreezeAmount, &g_Config.m_TcPredMarginInFreezeAmount, &Button, EcLocalize("Frozen Margin"), 0, 100, &CUi::ms_LinearScrollbarScale, 0, "ms");
 				}
-			}
-		},
-	});
-
-	/* Anti Ping Smoothing */
-	vModules.push_back({
-		ESettingsModuleColumn::RIGHT,
-		{"anti", "ping", "smoothing", "new", "algorithm", "optimistic", "prediction", "stable", "direction", "remember", "instability", "longer", "uncertainty", "duration"},
-		[](bool HasSearch) {
-			return 120.0f;
-		},
-		[&](CUIRect ModuleRect, bool HasSearch) {
-			ModuleRect.Draw(BackgroundColor, IGraphics::CORNER_ALL, CornerRoundness);
-			ModuleRect.VMargin(Margin, &ModuleRect);
-
-			ModuleRect.HSplitTop(HeaderHeight, &Button, &ModuleRect);
-			Ui()->DoLabel(&Button, EcLocalize("Anti Ping Smoothing"), HeaderSize, HeaderAlignment);
-			{
-				DoButton_CheckBoxAutoVMarginAndSet(&g_Config.m_TcAntiPingImproved, EcLocalize("Use new smoothing algorithm"), &g_Config.m_TcAntiPingImproved, &ModuleRect, LineSize);
-				DoButton_CheckBoxAutoVMarginAndSet(&g_Config.m_TcAntiPingStableDirection, EcLocalize("Optimistic prediction in stable direction"), &g_Config.m_TcAntiPingStableDirection, &ModuleRect, LineSize);
-				DoButton_CheckBoxAutoVMarginAndSet(&g_Config.m_TcAntiPingNegativeBuffer, EcLocalize("Remember instability for longer"), &g_Config.m_TcAntiPingNegativeBuffer, &ModuleRect, LineSize);
-				ModuleRect.HSplitTop(LineSize, &Button, &ModuleRect);
-				Ui()->DoScrollbarOption(&g_Config.m_TcAntiPingUncertaintyScale, &g_Config.m_TcAntiPingUncertaintyScale, &Button, EcLocalize("Uncertainty duration"), 50, 400, &CUi::ms_LinearScrollbarScale, CUi::SCROLLBAR_OPTION_NOCLAMPVALUE, "%");
 			}
 		},
 	});
