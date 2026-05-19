@@ -342,6 +342,8 @@ void CMenus::RenderEClientNewsPage(CUIRect MainView)
 		CUIRect m_Rect;
 		std::string m_Text;
 		float m_FontSize = 15.0f;
+		float m_WrapStartOffset = 0.0f;
+		float m_TextHeight = 0.0f;
 	};
 
 	class CSelectedNewsLine
@@ -413,21 +415,15 @@ void CMenus::RenderEClientNewsPage(CUIRect MainView)
 
 	std::vector<CNewsLine> vVisibleLines;
 
-	auto PrepareSelectionCursor = [&](const CNewsLine &Line) {
-		float TextHeight = 0.0f;
-		float MaxCharacterHeight = 0.0f;
-		int LineCount = 0;
-		STextSizeProperties TextSizeProps;
-		TextSizeProps.m_pHeight = &TextHeight;
-		TextSizeProps.m_pMaxCharacterHeightInLine = &MaxCharacterHeight;
-		TextSizeProps.m_pLineCount = &LineCount;
-
-		const float TextWidth = TextRender()->TextWidth(Line.m_FontSize, Line.m_Text.c_str(), -1, -1.0f, 0, TextSizeProps);
-
+	auto PrepareSelectionCursor = [&](const CNewsLine &Line, bool Render) {
 		CTextCursor Cursor;
-		Cursor.SetPosition(CUi::CalcAlignedCursorPos(&Line.m_Rect, vec2(TextWidth, TextHeight), TEXTALIGN_ML, LineCount == 1 ? &MaxCharacterHeight : nullptr));
+		const float TextYOffset = maximum(0.0f, (Line.m_Rect.h - Line.m_TextHeight) / 2.0f);
+		Cursor.SetPosition(vec2(Line.m_Rect.x, Line.m_Rect.y + TextYOffset));
 		Cursor.m_FontSize = Line.m_FontSize;
 		Cursor.m_Flags = TEXTFLAG_RENDER;
+		Cursor.m_LineWidth = Line.m_Rect.w;
+		if(Line.m_WrapStartOffset > 0.0f)
+			Cursor.m_StartX = Line.m_Rect.x + Line.m_WrapStartOffset;
 		Cursor.m_SelectionHeightFactor = 1.0f;
 		return Cursor;
 	};
@@ -436,7 +432,7 @@ void CMenus::RenderEClientNewsPage(CUIRect MainView)
 		if(SelectionStart < 0 || SelectionEnd <= SelectionStart || Line.m_Text.empty())
 			return;
 
-		CTextCursor Cursor = PrepareSelectionCursor(Line);
+		CTextCursor Cursor = PrepareSelectionCursor(Line, true);
 		Cursor.m_CalculateSelectionMode = TEXT_CURSOR_SELECTION_MODE_SET;
 		Cursor.m_SelectionStart = SelectionStart;
 		Cursor.m_SelectionEnd = SelectionEnd;
@@ -454,6 +450,7 @@ void CMenus::RenderEClientNewsPage(CUIRect MainView)
 		float LineFontSize = 15.0f;
 		ColorRGBA TextColor = TextRender()->DefaultTextColor();
 		std::string LineText = aLine;
+		float WrapStartOffset = 0.0f;
 
 		if(!LineText.empty())
 		{
@@ -491,16 +488,36 @@ void CMenus::RenderEClientNewsPage(CUIRect MainView)
 			}
 			else if(LineText.size() >= 2 && LineText[0] == '-' && LineText[1] == ' ')
 			{
-				LineText = std::string("•") + LineText.substr(1);
+				LineText = std::string("• ") + LineText.substr(2);
+				WrapStartOffset = TextRender()->TextWidth(LineFontSize, "• ");
 			}
 		}
+
+		CTextCursor MeasureCursor;
+		MeasureCursor.SetPosition(vec2(0.0f, 0.0f));
+		MeasureCursor.m_FontSize = LineFontSize;
+		MeasureCursor.m_Flags = 0;
+		MeasureCursor.m_LineWidth = ContentView.w;
+		if(WrapStartOffset > 0.0f)
+			MeasureCursor.m_StartX = WrapStartOffset;
+		TextRender()->TextEx(&MeasureCursor, LineText.c_str(), -1);
+		const float MeasuredHeight = maximum(LineFontSize, MeasureCursor.Height());
+		LineHeight = maximum(LineHeight, MeasuredHeight);
 
 		ContentView.HSplitTop(LineHeight, &Label, &ContentView);
 
 		if(s_ScrollRegion.AddRect(Label))
 		{
 			TextRender()->TextColor(TextColor);
-			Ui()->DoLabel(&Label, LineText.c_str(), LineFontSize, TEXTALIGN_ML);
+			CTextCursor RenderCursor;
+			const float TextYOffset = maximum(0.0f, (Label.h - MeasuredHeight) / 2.0f);
+			RenderCursor.SetPosition(vec2(Label.x, Label.y + TextYOffset));
+			RenderCursor.m_FontSize = LineFontSize;
+			RenderCursor.m_Flags = TEXTFLAG_RENDER;
+			RenderCursor.m_LineWidth = Label.w;
+			if(WrapStartOffset > 0.0f)
+				RenderCursor.m_StartX = Label.x + WrapStartOffset;
+			TextRender()->TextEx(&RenderCursor, LineText.c_str(), -1);
 			TextRender()->TextColor(TextRender()->DefaultTextColor());
 
 			CNewsLine &Line = vVisibleLines.emplace_back();
@@ -508,6 +525,8 @@ void CMenus::RenderEClientNewsPage(CUIRect MainView)
 			Line.m_Rect = Label;
 			Line.m_Text = LineText;
 			Line.m_FontSize = LineFontSize;
+			Line.m_WrapStartOffset = WrapStartOffset;
+			Line.m_TextHeight = MeasuredHeight;
 		}
 
 		++LineIndex;
@@ -529,7 +548,7 @@ void CMenus::RenderEClientNewsPage(CUIRect MainView)
 			if(LineBottom < SelectionMinY || LineTop > SelectionMaxY || Line.m_Text.empty())
 				continue;
 
-			CTextCursor Cursor = PrepareSelectionCursor(Line);
+			CTextCursor Cursor = PrepareSelectionCursor(Line, false);
 			Cursor.m_CalculateSelectionMode = TEXT_CURSOR_SELECTION_MODE_CALCULATE;
 			Cursor.m_PressMouse = s_SelectionMousePress;
 			Cursor.m_ReleaseMouse = s_SelectionMouseRelease;
