@@ -451,6 +451,8 @@ MACRO_CONFIG_INT(ClClientUsersBrowser, ec_client_users_browser, 0, 0, 1, CFGFLAG
 MACRO_CONFIG_INT(ClClientUsersOnlineInfo, ec_client_users_online_info, 0, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "list entity client users in the 'onlineinfo' command")
 MACRO_CONFIG_INT(ClClientUsersScoreboard, ec_client_users_scoreboard, 0, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Show entity client users in the scoreboard")
 
+MACRO_CONFIG_INT(ClUseUiColorOffline, ec_use_ui_color_offline, 0, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Whether to use the ui_color while not ingame")
+
 // Custom variables from my server for the editor
 // You can use these if you get my server from https://github.com/FoxNet-DDNet/FoxNet
 

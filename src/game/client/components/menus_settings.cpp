@@ -1049,6 +1049,10 @@ void CMenus::RenderSettingsGraphics(CUIRect MainView)
 	static CButtonContainer s_UiColorResetId;
 	DoLine_ColorPicker(&s_UiColorResetId, 25.0f, 13.0f, 2.0f, &MainView, Localize("UI Color"), &g_Config.m_UiColor, color_cast<ColorRGBA>(ColorHSLA(0xE4A046AFU, true)), false, nullptr, true);
 
+	MainView.HSplitTop(20.0f, &Button, &MainView);
+	if(DoButton_CheckBox(&g_Config.m_ClUseUiColorOffline, Localize("Use UI Color while offline"), g_Config.m_ClUseUiColorOffline, &Button))
+		g_Config.m_ClUseUiColorOffline ^= 1;
+
 	// Backend list
 	struct SMenuBackendInfo
 	{

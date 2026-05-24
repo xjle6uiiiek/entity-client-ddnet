@@ -2731,6 +2731,12 @@ void CMenus::UpdateColors()
 		ms_GuiColor.b * ColorIngameScaleA,
 		ms_GuiColor.a);
 
+	if(g_Config.m_ClUseUiColorOffline)
+	{
+		ms_ColorTabbarInactiveOutgame = ms_ColorTabbarActiveIngame.WithAlpha(ms_ColorTabbarActiveIngame.a - 0.25f < 0.25f ? 0.25f : ms_ColorTabbarActiveIngame.a - 0.25f);
+		ms_ColorTabbarActiveOutgame = ms_ColorTabbarActiveIngame.WithAlpha(ms_ColorTabbarActiveIngame.a < 0.5f ? 0.5f : ms_ColorTabbarActiveIngame.a);
+	}
+
 	ms_ColorTabbarHoverIngame = ColorRGBA(1.0f, 1.0f, 1.0f, 0.75f);
 }
 
