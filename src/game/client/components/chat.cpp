@@ -1601,7 +1601,7 @@ void CChat::OnRender()
 	if(m_Mode != MODE_NONE)
 	{
 		Ui()->StartCheck();
-		Ui()->Update(vec2(-1, -1), true);
+		Ui()->Update(true);
 	}
 
 	// send pending chat messages
