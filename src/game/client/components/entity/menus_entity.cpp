@@ -380,7 +380,7 @@ void CMenus::RenderEClientNewsPage(CUIRect MainView)
 	}
 
 	const CUIRect InteractionRect = MainView;
-	const bool HoveredNews = Ui()->MouseHovered(&InteractionRect) && !Ui()->IsPopupOpen();
+	const bool HoveredNews = Ui()->MouseHovered(&InteractionRect) && !Ui()->IsPopupOpen() && Ui()->HotItem() == nullptr;
 
 	if(HoveredNews && Ui()->MouseButtonClicked(0))
 	{
