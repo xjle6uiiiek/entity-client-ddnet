@@ -468,7 +468,7 @@ void CServerBrowser::Filter()
 			Filtered = true;
 		else
 		{
-			if(!Communities().empty() && m_LoadedCustomCommunities)
+			if(!Communities().empty())
 			{
 				if(m_ServerlistType == IServerBrowser::TYPE_INTERNET || m_ServerlistType == IServerBrowser::TYPE_FAVORITES)
 				{
