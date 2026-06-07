@@ -1,6 +1,7 @@
 #ifndef BASE_SYSTEM_H
 #define BASE_SYSTEM_H
 
+#include "color.h"
 #include "dbg.h"
 #include "detect.h"
 #include "fs.h"
@@ -17,5 +18,7 @@ bool str_isalluppercase(const char *str);
 
 void SetFlag(int32_t &Flags, int n, bool Value);
 bool IsFlagSet(int32_t Flags, int n);
+
+// ColorRGBA NightShiftColor(ColorRGBA OriginalColor);
 
 #endif // BASE_SYSTEM_H

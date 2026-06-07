@@ -453,6 +453,10 @@ MACRO_CONFIG_INT(ClClientUsersScoreboard, ec_client_users_scoreboard, 0, 0, 1, C
 
 MACRO_CONFIG_INT(ClUseUiColorOffline, ec_use_ui_color_offline, 0, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Whether to use the ui_color while not ingame")
 
+MACRO_CONFIG_INT(ClStatisticsShowFps, ec_statistics_show_fps, 0, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Whether to show FPS in the statistics")
+MACRO_CONFIG_INT(ClStatisticsShowPing, ec_statistics_show_ping, 0, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Whether to show Ping in the statistics")
+MACRO_CONFIG_INT(ClStatisticsShowSnapRate, ec_statistics_show_snap_rate, 0, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Whether to show Snap Rate in the statistics")
+
 // Custom variables from my server for the editor
 // You can use these if you get my server from https://github.com/FoxNet-DDNet/FoxNet
 

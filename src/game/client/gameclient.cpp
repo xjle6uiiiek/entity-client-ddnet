@@ -175,6 +175,7 @@ void CGameClient::OnConsoleInit()
 					      &m_WarList, // TClient
 					      &m_StatusBar, // TClient
 					      &m_InfoMessages,
+					      &m_PerformanceStatistics, // EClient
 					      &m_Chat,
 					      &m_Broadcast,
 					      &m_ImportantAlert,

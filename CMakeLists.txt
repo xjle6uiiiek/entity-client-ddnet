@@ -2610,6 +2610,8 @@ if(CLIENT)
     components/entity/moderation/mod_menu.cpp
     components/entity/moving_tiles.cpp
     components/entity/moving_tiles.h 
+    components/entity/performance_statistics.cpp
+    components/entity/performance_statistics.h
     components/entity/physicball.cpp
     components/entity/physicball.h 
     components/entity/quick_actions.cpp

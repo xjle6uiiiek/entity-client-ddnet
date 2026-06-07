@@ -3684,7 +3684,7 @@ void CMenus::RenderSettingsVisual(CUIRect MainView)
 		},
 	});
 
-	/* ModuleRect */
+	/* Miscellaneous */
 	vModules.push_back({
 		ESettingsModuleColumn::RIGHT,
 		{"miscellaneous", "custom", "font", "katana", "colored", "options", "freeze", "frozen", "stars", "ping", "circles", "names", "white", "feet", "old", "team", "moving", "tiles", "entities", "entity", "cursor"},
@@ -3809,6 +3809,27 @@ void CMenus::RenderSettingsVisual(CUIRect MainView)
 				ModuleRect.HSplitTop(5.0f, &Button, &ModuleRect);
 				ModuleRect.HSplitTop(LineSize, &Button, &ModuleRect);
 				Ui()->DoScrollbarOption(&g_Config.m_ClCursorOpacitySpec, &g_Config.m_ClCursorOpacitySpec, &Button, EcLocalize("Cursor Opacity in Spec"), 0, 100, &CUi::ms_LinearScrollbarScale, 0u, "");
+			}
+		},
+	});
+
+	/* Miscellaneous */
+	vModules.push_back({
+		ESettingsModuleColumn::RIGHT,
+		{"stats", "fps", "ping", "snap", "rate", "show"},
+		[](bool HasSearch) {
+			return 100;
+		},
+		[&](CUIRect ModuleRect, bool HasSearch) {
+			ModuleRect.Draw(BackgroundColor, IGraphics::CORNER_ALL, CornerRoundness);
+			ModuleRect.VMargin(Margin, &ModuleRect);
+
+			ModuleRect.HSplitTop(HeaderHeight, &Button, &ModuleRect);
+			Ui()->DoLabel(&Button, EcLocalize("Stats"), HeaderSize, HeaderAlignment);
+			{
+				DoButton_CheckBoxAutoVMarginAndSet(&g_Config.m_ClStatisticsShowFps, EcLocalize("Show FPS"), &g_Config.m_ClStatisticsShowFps, &ModuleRect, LineSize);
+				DoButton_CheckBoxAutoVMarginAndSet(&g_Config.m_ClStatisticsShowPing, EcLocalize("Show Ping"), &g_Config.m_ClStatisticsShowPing, &ModuleRect, LineSize);
+				DoButton_CheckBoxAutoVMarginAndSet(&g_Config.m_ClStatisticsShowSnapRate, EcLocalize("Show Snap Rate"), &g_Config.m_ClStatisticsShowSnapRate, &ModuleRect, LineSize);
 			}
 		},
 	});
