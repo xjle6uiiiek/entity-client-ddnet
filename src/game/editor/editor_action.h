@@ -14,6 +14,9 @@ public:
 
 	virtual bool IsEmpty() { return false; }
 
+	virtual int GetType() const { return -1; }
+	virtual void Serialize(class CPacker *pPacker) const {}
+
 	const char *DisplayText() const { return m_aDisplayText; }
 
 protected:

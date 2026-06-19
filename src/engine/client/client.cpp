@@ -1286,6 +1286,11 @@ const char *CClient::LoadMap(const char *pName, const char *pFilename, const std
 		return s_aErrorMsg;
 	}
 
+	if(g_Config.m_ClEditor)
+	{
+		m_pEditor->Load(pFilename, IStorage::TYPE_ALL);
+	}
+
 	if(WantedSha256.has_value() && GameClient()->Map()->Sha256() != WantedSha256.value())
 	{
 		char aWanted[SHA256_MAXSTRSIZE];

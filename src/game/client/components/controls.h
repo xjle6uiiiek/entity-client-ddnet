@@ -38,6 +38,7 @@ public:
 	CNetObj_PlayerInput m_aLastData[NUM_DUMMIES];
 	int m_aInputDirectionLeft[NUM_DUMMIES];
 	int m_aInputDirectionRight[NUM_DUMMIES];
+	int m_aInputAlignX[NUM_DUMMIES]; // EClient: while held, auto-align X with the tee directly below
 	int m_aShowHookColl[NUM_DUMMIES];
 
 	// TClient
@@ -59,6 +60,10 @@ public:
 	void ClampMousePos();
 	void ResetInput(int Dummy);
 	bool CheckNewInput();
+
+	// EClient: overrides Direction (in-place) to align the local tee's X with the tee directly below,
+	// while the +alignx bind is held. No-op if the bind isn't held or no suitable target is found.
+	void ApplyAlignX(int Dummy, int &Direction);
 
 private:
 	static void ConKeyInputState(IConsole::IResult *pResult, void *pUserData);

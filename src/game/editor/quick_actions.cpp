@@ -262,3 +262,44 @@ void CEditor::TestMapLocally()
 		}
 	}
 }
+
+void CEditor::HostSession(int Port)
+{
+	const char *pFilenameNoMaps = str_startswith(Map()->m_aFilename, "maps/");
+	if(!pFilenameNoMaps)
+	{
+		ShowFileDialogError("The map isn't saved in the maps/ folder. It must be saved there to host a collaborative session.");
+		return;
+	}
+
+	char aFilenameNoExt[IO_MAX_PATH_LENGTH];
+	fs_split_file_extension(pFilenameNoMaps, aFilenameNoExt, sizeof(aFilenameNoExt));
+
+	CGameClient *pGameClient = (CGameClient *)Kernel()->RequestInterface<IGameClient>();
+	if(pGameClient->m_LocalServer.IsServerRunning())
+	{
+		pGameClient->m_LocalServer.KillServer();
+	}
+
+	char aMapChange[IO_MAX_PATH_LENGTH + 64];
+	str_format(aMapChange, sizeof(aMapChange), "change_map %s", aFilenameNoExt);
+	char aPortCmd[64];
+	str_format(aPortCmd, sizeof(aPortCmd), "sv_port %d", Port);
+
+	if(pGameClient->m_LocalServer.RunServer({"sv_register 0", "sv_editor_session 1", aPortCmd, aMapChange}))
+	{
+		char aConnectAddr[64];
+		str_format(aConnectAddr, sizeof(aConnectAddr), "localhost:%d", Port);
+		Client()->Connect(aConnectAddr);
+	}
+	else
+	{
+		ShowFileDialogError("Local collaborative server could not be started.");
+	}
+}
+
+void CEditor::JoinSession(const char *pAddress)
+{
+	Client()->Connect(pAddress);
+}
+

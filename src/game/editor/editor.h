@@ -105,6 +105,15 @@ enum
 	PROPTYPE_AUTOMAPPER_REFERENCE,
 };
 
+struct SCreatorInfo
+{
+	int m_ClientId;
+	vec2 m_CursorPos;
+	vec2 m_TargetPos;
+	int m_ActiveLayer;
+	float m_LastUpdate;
+};
+
 class CEditor : public IEditor, public IEnvelopeEval
 {
 	class IInput *m_pInput = nullptr;
@@ -148,6 +157,7 @@ class CEditor : public IEditor, public IEnvelopeEval
 	static constexpr ColorRGBA ms_DefaultPropColor = ColorRGBA(1, 1, 1, 0.5f);
 
 public:
+	class IKernel *Kernel() { return IInterface::Kernel(); }
 	class IInput *Input() const { return m_pInput; }
 	class IClient *Client() const { return m_pClient; }
 	class IConfigManager *ConfigManager() const { return m_pConfigManager; }
@@ -185,6 +195,8 @@ public:
 	bool IsNonGameTileLayerSelected() const;
 	void MapDetails();
 	void TestMapLocally();
+	void HostSession(int Port);
+	void JoinSession(const char *pAddress);
 #define REGISTER_QUICK_ACTION(name, text, callback, disabled, active, button_color, description) CQuickAction m_QuickAction##name;
 #include <game/editor/quick_actions.h>
 #undef REGISTER_QUICK_ACTION
@@ -279,6 +291,7 @@ public:
 	void ResetMentions() override { m_Mentions = 0; }
 	void OnIngameMoved() override { m_IngameMoved = true; }
 	void ResetIngameMoved() override { m_IngameMoved = false; }
+	void OnMessage(int MsgId, class CUnpacker *pUnpacker) override;
 
 	void HandleCursorMovement();
 	void MouseAxisLock(vec2 &CursorRel);
@@ -336,6 +349,11 @@ public:
 	int m_Mode;
 	int m_Dialog;
 	char m_aTooltip[256] = "";
+	std::map<int, SCreatorInfo> m_RemoteCreators;
+	std::map<std::pair<int, int>, int> m_RemoteLocks; // (GroupIndex, LayerIndex) -> ClientId
+	int m_MyLockedGroup = -1;
+	int m_MyLockedLayer = -1;
+	bool m_CollabSessionSentInit = false;
 
 	bool m_BrushColorEnabled;
 
@@ -365,6 +383,8 @@ public:
 		POPEVENT_REMOVE_USED_SOUND,
 		POPEVENT_RESTART_SERVER,
 		POPEVENT_RESTARTING_SERVER,
+		POPEVENT_HOST_SESSION,
+		POPEVENT_JOIN_SESSION,
 	};
 
 	int m_PopupEventType;

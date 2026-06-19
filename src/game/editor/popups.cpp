@@ -129,6 +129,26 @@ CUi::EPopupMenuFunctionResult CEditor::PopupMenuFile(void *pContext, CUIRect Vie
 		return CUi::POPUP_CLOSE_CURRENT;
 	}
 
+	View.HSplitTop(2.0f, nullptr, &View);
+	View.HSplitTop(12.0f, &Slot, &View);
+	static int s_HostSessionButton = 0;
+	if(pEditor->DoButton_MenuItem(&s_HostSessionButton, "Host Collab Session", 0, &Slot, BUTTONFLAG_LEFT, "Host a collaborative multi-creator editing session on this map."))
+	{
+		pEditor->m_PopupEventType = CEditor::POPEVENT_HOST_SESSION;
+		pEditor->m_PopupEventActivated = true;
+		return CUi::POPUP_CLOSE_CURRENT;
+	}
+
+	View.HSplitTop(2.0f, nullptr, &View);
+	View.HSplitTop(12.0f, &Slot, &View);
+	static int s_JoinSessionButton = 0;
+	if(pEditor->DoButton_MenuItem(&s_JoinSessionButton, "Join Collab Session", 0, &Slot, BUTTONFLAG_LEFT, "Join an existing collaborative editing session by IP address."))
+	{
+		pEditor->m_PopupEventType = CEditor::POPEVENT_JOIN_SESSION;
+		pEditor->m_PopupEventActivated = true;
+		return CUi::POPUP_CLOSE_CURRENT;
+	}
+
 	View.HSplitTop(10.0f, nullptr, &View);
 	View.HSplitTop(12.0f, &Slot, &View);
 	if(pEditor->DoButton_MenuItem(&s_ExitButton, "Exit", 0, &Slot, BUTTONFLAG_LEFT, "[Escape] Exit from the editor."))
@@ -1730,6 +1750,11 @@ CUi::EPopupMenuFunctionResult CEditor::PopupMapInfo(void *pContext, CUIRect View
 
 CUi::EPopupMenuFunctionResult CEditor::PopupEvent(void *pContext, CUIRect View, bool Active)
 {
+	static char s_aHostPort[32] = "8303";
+	static char s_aJoinAddress[256] = "localhost:8303";
+	static CLineInput s_HostPortInput;
+	static CLineInput s_JoinAddressInput;
+
 	CEditor *pEditor = static_cast<CEditor *>(pContext);
 
 	const char *pTitle;
@@ -1829,6 +1854,16 @@ CUi::EPopupMenuFunctionResult CEditor::PopupEvent(void *pContext, CUIRect View, 
 			return CUi::POPUP_CLOSE_CURRENT;
 		}
 	}
+	else if(pEditor->m_PopupEventType == POPEVENT_HOST_SESSION)
+	{
+		pTitle = "Host Collaborative Session";
+		pMessage = "Enter the port number to host the collaborative session on:";
+	}
+	else if(pEditor->m_PopupEventType == POPEVENT_JOIN_SESSION)
+	{
+		pTitle = "Join Collaborative Session";
+		pMessage = "Enter the server IP address and port:";
+	}
 	else
 	{
 		dbg_assert_failed("m_PopupEventType invalid");
@@ -1846,7 +1881,35 @@ CUi::EPopupMenuFunctionResult CEditor::PopupEvent(void *pContext, CUIRect View, 
 	// message
 	SLabelProperties Props;
 	Props.m_MaxWidth = View.w;
-	pEditor->Ui()->DoLabel(&View, pMessage, 10.0f, TEXTALIGN_ML, Props);
+	
+	if(pEditor->m_PopupEventType == POPEVENT_HOST_SESSION || pEditor->m_PopupEventType == POPEVENT_JOIN_SESSION)
+	{
+		CUIRect MessageRect, EditBoxRect;
+		View.HSplitTop(40.0f, &MessageRect, &View);
+		pEditor->Ui()->DoLabel(&MessageRect, pMessage, 10.0f, TEXTALIGN_ML, Props);
+		
+		View.HSplitTop(10.0f, nullptr, &View);
+		View.HSplitTop(18.0f, &EditBoxRect, &View);
+		
+		if(pEditor->m_PopupEventType == POPEVENT_HOST_SESSION)
+		{
+			if(s_HostPortInput.IsEmpty())
+				s_HostPortInput.SetBuffer(s_aHostPort, sizeof(s_aHostPort));
+			
+			pEditor->DoEditBox(&s_HostPortInput, &EditBoxRect, 10.0f);
+		}
+		else
+		{
+			if(s_JoinAddressInput.IsEmpty())
+				s_JoinAddressInput.SetBuffer(s_aJoinAddress, sizeof(s_aJoinAddress));
+			
+			pEditor->DoEditBox(&s_JoinAddressInput, &EditBoxRect, 10.0f);
+		}
+	}
+	else
+	{
+		pEditor->Ui()->DoLabel(&View, pMessage, 10.0f, TEXTALIGN_ML, Props);
+	}
 
 	// button bar
 	ButtonBar.VSplitLeft(110.0f, &Button, &ButtonBar);
@@ -1881,7 +1944,20 @@ CUi::EPopupMenuFunctionResult CEditor::PopupEvent(void *pContext, CUIRect View, 
 	static int s_ConfirmButton = 0;
 	if(pEditor->DoButton_Editor(&s_ConfirmButton, "Confirm", 0, &Button, BUTTONFLAG_LEFT, nullptr) || (Active && pEditor->Ui()->ConsumeHotkey(CUi::HOTKEY_ENTER)))
 	{
-		if(pEditor->m_PopupEventType == POPEVENT_EXIT)
+		if(pEditor->m_PopupEventType == POPEVENT_HOST_SESSION)
+		{
+			int Port = str_toint(s_aHostPort);
+			if(Port <= 0 || Port > 65535)
+				Port = 8303;
+			pEditor->HostSession(Port);
+			return CUi::POPUP_CLOSE_CURRENT;
+		}
+		else if(pEditor->m_PopupEventType == POPEVENT_JOIN_SESSION)
+		{
+			pEditor->JoinSession(s_aJoinAddress);
+			return CUi::POPUP_CLOSE_CURRENT;
+		}
+		else if(pEditor->m_PopupEventType == POPEVENT_EXIT)
 		{
 			pEditor->OnClose();
 			g_Config.m_ClEditor = 0;

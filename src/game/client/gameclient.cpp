@@ -3,6 +3,8 @@
 
 #include "gameclient.h"
 
+#include <engine/shared/protocol_ex.h>
+
 #include "components/background.h"
 #include "components/binds.h"
 #include "components/broadcast.h"
@@ -1130,6 +1132,16 @@ void CGameClient::OnRelease()
 
 void CGameClient::OnMessage(int MsgId, CUnpacker *pUnpacker, int Conn, bool Dummy)
 {
+	if(g_Config.m_ClEditor && (MsgId == NETMSG_EDITOR_SESSION_INIT ||
+		MsgId == NETMSG_EDITOR_ACTION ||
+		MsgId == NETMSG_EDITOR_CURSOR ||
+		MsgId == NETMSG_EDITOR_LOCK ||
+		MsgId == NETMSG_EDITOR_SYNC_STATUS))
+	{
+		m_pEditor->OnMessage(MsgId, pUnpacker);
+		return;
+	}
+
 	// special messages
 	static_assert((int)NETMSGTYPE_SV_TUNEPARAMS == (int)protocol7::NETMSGTYPE_SV_TUNEPARAMS, "0.6 and 0.7 tune message id do not match");
 	if(MsgId == NETMSGTYPE_SV_TUNEPARAMS)

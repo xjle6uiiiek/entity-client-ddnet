@@ -52,3 +52,11 @@ UUID(NETMSG_FOXNET_INFO, "sv-foxnet-info@foxnet-ddnet.github.io")
 UUID(NETMSG_FOXNET_FASTINPUTS, "cl-foxnet-fastinputs@foxnet-ddnet.github.io")
 UUID(NETMSG_FOXNET_COSMETIC_SNAPS, "cosmetic-snaps@foxnet-ddnet.github.io")
 // FoxNet>
+
+// Collaborative Map Editor Messages
+UUID(NETMSG_EDITOR_SESSION_INIT, "cl-editor-session-init@ddnet.org")
+UUID(NETMSG_EDITOR_ACTION, "cl-editor-action@ddnet.org")
+UUID(NETMSG_EDITOR_CURSOR, "cl-editor-cursor@ddnet.org")
+UUID(NETMSG_EDITOR_LOCK, "cl-editor-lock@ddnet.org")
+UUID(NETMSG_EDITOR_SYNC_STATUS, "cl-editor-sync-status@ddnet.org")
+

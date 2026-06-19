@@ -22,6 +22,7 @@ public:
 	virtual void ResetMentions() = 0;
 	virtual void OnIngameMoved() = 0;
 	virtual void ResetIngameMoved() = 0;
+	virtual void OnMessage(int MsgId, class CUnpacker *pUnpacker) = 0;
 };
 
 extern IEditor *CreateEditor();

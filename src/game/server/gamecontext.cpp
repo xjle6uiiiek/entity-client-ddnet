@@ -32,6 +32,7 @@
 #include <engine/shared/linereader.h>
 #include <engine/shared/memheap.h>
 #include <engine/shared/protocol.h>
+#include <engine/shared/protocol_ex.h>
 #include <engine/shared/protocolglue.h>
 #include <engine/storage.h>
 
@@ -1894,6 +1895,36 @@ void CGameContext::OnClientDrop(int ClientId, const char *pReason)
 {
 	LogEvent("Disconnect", ClientId);
 
+	// Release all editor locks held by this client
+	for(auto it = m_EditorLocks.begin(); it != m_EditorLocks.end(); )
+	{
+		if(it->second == ClientId)
+		{
+			int GroupIndex = it->first.first;
+			int LayerIndex = it->first.second;
+
+			// Broadcast unlock to all clients
+			CMsgPacker Msg(NETMSG_EDITOR_LOCK, false);
+			Msg.AddInt(-1);
+			Msg.AddInt(GroupIndex);
+			Msg.AddInt(LayerIndex);
+			Msg.AddInt(0); // Unlocked state
+			for(int i = 0; i < MAX_CLIENTS; i++)
+			{
+				if(m_apPlayers[i] && i != ClientId)
+				{
+					Server()->SendMsg(&Msg, MSGFLAG_VITAL, i);
+				}
+			}
+
+			it = m_EditorLocks.erase(it);
+		}
+		else
+		{
+			++it;
+		}
+	}
+
 	AbortVoteKickOnDisconnect(ClientId);
 	m_pController->OnPlayerDisconnect(m_apPlayers[ClientId], pReason);
 	delete m_apPlayers[ClientId];
@@ -2222,6 +2253,25 @@ void CGameContext::CensorMessage(char *pCensoredMessage, const char *pMessage, i
 
 void CGameContext::OnMessage(int MsgId, CUnpacker *pUnpacker, int ClientId)
 {
+	if(g_Config.m_SvEditorSession && (MsgId == NETMSG_EDITOR_SESSION_INIT ||
+		MsgId == NETMSG_EDITOR_ACTION ||
+		MsgId == NETMSG_EDITOR_CURSOR ||
+		MsgId == NETMSG_EDITOR_LOCK ||
+		MsgId == NETMSG_EDITOR_SYNC_STATUS))
+	{
+		dbg_msg("collab_debug", "Received Editor Msg=%d from ClientId=%d", MsgId, ClientId);
+
+		if(m_apPlayers[ClientId])
+		{
+			if(MsgId == NETMSG_EDITOR_SESSION_INIT) OnEditorSessionInit(ClientId, pUnpacker);
+			else if(MsgId == NETMSG_EDITOR_ACTION) OnEditorAction(ClientId, pUnpacker);
+			else if(MsgId == NETMSG_EDITOR_CURSOR) OnEditorCursor(ClientId, pUnpacker);
+			else if(MsgId == NETMSG_EDITOR_LOCK) OnEditorLock(ClientId, pUnpacker);
+			else if(MsgId == NETMSG_EDITOR_SYNC_STATUS) OnEditorSyncStatus(ClientId, pUnpacker);
+		}
+		return;
+	}
+
 	if(m_TeeHistorianActive)
 	{
 		if(m_NetObjHandler.TeeHistorianRecordMsg(MsgId))
@@ -5493,3 +5543,201 @@ bool CGameContext::PracticeByDefault() const
 {
 	return g_Config.m_SvPracticeByDefault && g_Config.m_SvTestingCommands;
 }
+
+void CGameContext::OnEditorSessionInit(int ClientId, class CUnpacker *pUnpacker)
+{
+	dbg_msg("collab_debug", "OnEditorSessionInit from ClientId=%d", ClientId);
+
+	// Confirm session init to client
+	CMsgPacker ConfirmMsg(NETMSG_EDITOR_SESSION_INIT, false);
+	Server()->SendMsg(&ConfirmMsg, MSGFLAG_VITAL, ClientId);
+
+	// Send current lock status of all layers
+	for(auto const &Pair : m_EditorLocks)
+	{
+		int LockOwner = Pair.second;
+		int GroupIndex = Pair.first.first;
+		int LayerIndex = Pair.first.second;
+
+		CMsgPacker LockMsg(NETMSG_EDITOR_LOCK, false);
+		LockMsg.AddInt(LockOwner);
+		LockMsg.AddInt(GroupIndex);
+		LockMsg.AddInt(LayerIndex);
+		LockMsg.AddInt(1); // Locked state
+		Server()->SendMsg(&LockMsg, MSGFLAG_VITAL, ClientId);
+	}
+}
+
+void CGameContext::OnEditorAction(int ClientId, class CUnpacker *pUnpacker)
+{
+	dbg_msg("server", "OnEditorAction from ClientId=%d", ClientId);
+
+	// Parse ActionType to check locks
+	CUnpacker PeekUnpacker;
+	PeekUnpacker.Reset(pUnpacker->CompleteData(), pUnpacker->CompleteSize());
+	int ActionType = PeekUnpacker.GetInt();
+	if(!PeekUnpacker.Error())
+	{
+		if(ActionType == 1) // Brush Draw Action
+		{
+			int GroupIndex = PeekUnpacker.GetInt();
+			int LayerCount = PeekUnpacker.GetInt();
+			if(!PeekUnpacker.Error())
+			{
+				for(int i = 0; i < LayerCount; i++)
+				{
+					int LayerIndex = PeekUnpacker.GetInt();
+					if(PeekUnpacker.Error())
+						break;
+
+					// Check if this layer is locked by someone else
+					std::pair<int, int> Key(GroupIndex, LayerIndex);
+					auto it = m_EditorLocks.find(Key);
+					if(it != m_EditorLocks.end() && it->second != ClientId)
+					{
+						dbg_msg("server", "REJECTED action on Group=%d Layer=%d from ClientId=%d (locked by %d)",
+							GroupIndex, LayerIndex, ClientId, it->second);
+						return; // Reject action entirely
+					}
+
+					// Skip tile changes for this layer to keep peeking if there are multiple layers
+					int ChangesSize = PeekUnpacker.GetInt();
+					if(PeekUnpacker.Error())
+						break;
+					for(int c = 0; c < ChangesSize; c++)
+					{
+						PeekUnpacker.GetInt(); // y
+						int LineSize = PeekUnpacker.GetInt();
+						if(PeekUnpacker.Error())
+							break;
+						for(int l = 0; l < LineSize; l++)
+						{
+							PeekUnpacker.GetInt(); // x
+							PeekUnpacker.GetRaw(sizeof(CTile)); // m_Previous
+							PeekUnpacker.GetRaw(sizeof(CTile)); // m_Current
+							if(PeekUnpacker.Error())
+								break;
+						}
+						if(PeekUnpacker.Error())
+							break;
+					}
+					if(PeekUnpacker.Error())
+						break;
+				}
+			}
+		}
+	}
+
+	CMsgPacker Msg(NETMSG_EDITOR_ACTION, false);
+	Msg.AddRaw(pUnpacker->CompleteData(), pUnpacker->CompleteSize());
+
+	dbg_msg("collab_debug", "OnEditorAction: broadcasting from ClientId=%d", ClientId);
+
+	// Broadcast action to all other connected clients
+	for(int i = 0; i < MAX_CLIENTS; i++)
+	{
+		if(m_apPlayers[i] && i != ClientId)
+		{
+			Server()->SendMsg(&Msg, MSGFLAG_VITAL, i);
+		}
+	}
+}
+
+void CGameContext::OnEditorCursor(int ClientId, class CUnpacker *pUnpacker)
+{
+	int CursorX = pUnpacker->GetInt();
+	int CursorY = pUnpacker->GetInt();
+	int ActiveLayer = pUnpacker->GetInt();
+	if(pUnpacker->Error())
+		return;
+
+	// Broadcast cursor positions to all other clients
+	CMsgPacker Msg(NETMSG_EDITOR_CURSOR, false);
+	Msg.AddInt(ClientId);
+	Msg.AddInt(CursorX);
+	Msg.AddInt(CursorY);
+	Msg.AddInt(ActiveLayer);
+
+	for(int i = 0; i < MAX_CLIENTS; i++)
+	{
+		if(m_apPlayers[i] && i != ClientId)
+		{
+			Server()->SendMsg(&Msg, 0, i); // Unreliable broadcast
+		}
+	}
+}
+
+void CGameContext::OnEditorLock(int ClientId, class CUnpacker *pUnpacker)
+{
+	int GroupIndex = pUnpacker->GetInt();
+	int LayerIndex = pUnpacker->GetInt();
+	int LockType = pUnpacker->GetInt();
+	if(pUnpacker->Error())
+		return;
+
+	std::pair<int, int> Key(GroupIndex, LayerIndex);
+	if(LockType == 1) // Request Lock
+	{
+		auto it = m_EditorLocks.find(Key);
+		if(it == m_EditorLocks.end())
+		{
+			// Grant lock
+			m_EditorLocks[Key] = ClientId;
+			dbg_msg("server", "Grant lock on Group=%d Layer=%d to ClientId=%d", GroupIndex, LayerIndex, ClientId);
+
+			// Broadcast lock grant to all clients
+			CMsgPacker Msg(NETMSG_EDITOR_LOCK, false);
+			Msg.AddInt(ClientId);
+			Msg.AddInt(GroupIndex);
+			Msg.AddInt(LayerIndex);
+			Msg.AddInt(1); // Locked state
+			for(int i = 0; i < MAX_CLIENTS; i++)
+			{
+				if(m_apPlayers[i])
+				{
+					Server()->SendMsg(&Msg, MSGFLAG_VITAL, i);
+				}
+			}
+		}
+		else if(it->second != ClientId)
+		{
+			// Lock denied
+			dbg_msg("server", "Deny lock request on Group=%d Layer=%d from ClientId=%d (owned by %d)", GroupIndex, LayerIndex, ClientId, it->second);
+			CMsgPacker Msg(NETMSG_EDITOR_LOCK, false);
+			Msg.AddInt(it->second); // Current lock owner
+			Msg.AddInt(GroupIndex);
+			Msg.AddInt(LayerIndex);
+			Msg.AddInt(2); // Lock Denied/Owned by someone else
+			Server()->SendMsg(&Msg, MSGFLAG_VITAL, ClientId);
+		}
+	}
+	else if(LockType == 0) // Release Lock
+	{
+		auto it = m_EditorLocks.find(Key);
+		if(it != m_EditorLocks.end() && it->second == ClientId)
+		{
+			m_EditorLocks.erase(it);
+			dbg_msg("server", "Release lock on Group=%d Layer=%d by ClientId=%d", GroupIndex, LayerIndex, ClientId);
+
+			// Broadcast unlock to all clients
+			CMsgPacker Msg(NETMSG_EDITOR_LOCK, false);
+			Msg.AddInt(-1);
+			Msg.AddInt(GroupIndex);
+			Msg.AddInt(LayerIndex);
+			Msg.AddInt(0); // Unlocked state
+			for(int i = 0; i < MAX_CLIENTS; i++)
+			{
+				if(m_apPlayers[i])
+				{
+					Server()->SendMsg(&Msg, MSGFLAG_VITAL, i);
+				}
+			}
+		}
+	}
+}
+
+void CGameContext::OnEditorSyncStatus(int ClientId, class CUnpacker *pUnpacker)
+{
+	dbg_msg("server", "OnEditorSyncStatus from ClientId=%d", ClientId);
+}
+

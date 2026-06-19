@@ -1,5 +1,7 @@
 #include "editor_actions.h"
 
+#include <engine/shared/packer.h>
+
 #include <base/log.h>
 
 #include <game/editor/editor.h>
@@ -12,54 +14,57 @@
 #include <game/editor/mapitems/layer_sounds.h>
 #include <game/editor/mapitems/map.h>
 
-CEditorBrushDrawAction::CEditorBrushDrawAction(CEditorMap *pMap, int Group) :
+CEditorBrushDrawAction::CEditorBrushDrawAction(CEditorMap *pMap, int Group, bool FromHistory) :
 	IEditorAction(pMap), m_Group(Group)
 {
-	for(size_t k = 0; k < Map()->m_vpGroups[Group]->m_vpLayers.size(); k++)
+	if(FromHistory)
 	{
-		auto pLayer = Map()->m_vpGroups[Group]->m_vpLayers[k];
-
-		if(pLayer->m_Type == LAYERTYPE_TILES)
+		for(size_t k = 0; k < Map()->m_vpGroups[Group]->m_vpLayers.size(); k++)
 		{
-			auto pLayerTiles = std::static_pointer_cast<CLayerTiles>(pLayer);
+			auto pLayer = Map()->m_vpGroups[Group]->m_vpLayers[k];
 
-			if(pLayer == Map()->m_pTeleLayer)
+			if(pLayer->m_Type == LAYERTYPE_TILES)
 			{
-				if(!Map()->m_pTeleLayer->m_History.empty())
-				{
-					m_TeleTileChanges = std::map(Map()->m_pTeleLayer->m_History);
-					Map()->m_pTeleLayer->ClearHistory();
-				}
-			}
-			else if(pLayer == Map()->m_pTuneLayer)
-			{
-				if(!Map()->m_pTuneLayer->m_History.empty())
-				{
-					m_TuneTileChanges = std::map(Map()->m_pTuneLayer->m_History);
-					Map()->m_pTuneLayer->ClearHistory();
-				}
-			}
-			else if(pLayer == Map()->m_pSwitchLayer)
-			{
-				if(!Map()->m_pSwitchLayer->m_History.empty())
-				{
-					m_SwitchTileChanges = std::map(Map()->m_pSwitchLayer->m_History);
-					Map()->m_pSwitchLayer->ClearHistory();
-				}
-			}
-			else if(pLayer == Map()->m_pSpeedupLayer)
-			{
-				if(!Map()->m_pSpeedupLayer->m_History.empty())
-				{
-					m_SpeedupTileChanges = std::map(Map()->m_pSpeedupLayer->m_History);
-					Map()->m_pSpeedupLayer->ClearHistory();
-				}
-			}
+				auto pLayerTiles = std::static_pointer_cast<CLayerTiles>(pLayer);
 
-			if(!pLayerTiles->m_TilesHistory.empty())
-			{
-				m_vTileChanges.emplace_back(k, std::map(pLayerTiles->m_TilesHistory));
-				pLayerTiles->ClearHistory();
+				if(pLayer == Map()->m_pTeleLayer)
+				{
+					if(!Map()->m_pTeleLayer->m_History.empty())
+					{
+						m_TeleTileChanges = std::map(Map()->m_pTeleLayer->m_History);
+						Map()->m_pTeleLayer->ClearHistory();
+					}
+				}
+				else if(pLayer == Map()->m_pTuneLayer)
+				{
+					if(!Map()->m_pTuneLayer->m_History.empty())
+					{
+						m_TuneTileChanges = std::map(Map()->m_pTuneLayer->m_History);
+						Map()->m_pTuneLayer->ClearHistory();
+					}
+				}
+				else if(pLayer == Map()->m_pSwitchLayer)
+				{
+					if(!Map()->m_pSwitchLayer->m_History.empty())
+					{
+						m_SwitchTileChanges = std::map(Map()->m_pSwitchLayer->m_History);
+						Map()->m_pSwitchLayer->ClearHistory();
+					}
+				}
+				else if(pLayer == Map()->m_pSpeedupLayer)
+				{
+					if(!Map()->m_pSpeedupLayer->m_History.empty())
+					{
+						m_SpeedupTileChanges = std::map(Map()->m_pSpeedupLayer->m_History);
+						Map()->m_pSpeedupLayer->ClearHistory();
+					}
+				}
+
+				if(!pLayerTiles->m_TilesHistory.empty())
+				{
+					m_vTileChanges.emplace_back(k, std::map(pLayerTiles->m_TilesHistory));
+					pLayerTiles->ClearHistory();
+				}
 			}
 		}
 	}
@@ -237,6 +242,240 @@ void CEditorBrushDrawAction::Apply(bool Undo)
 		}
 	}
 }
+
+void CEditorBrushDrawAction::Serialize(class CPacker *pPacker) const
+{
+	pPacker->AddInt(m_Group);
+
+	// 1. Normal tiles changes
+	pPacker->AddInt((int)m_vTileChanges.size());
+	for(auto const &Pair : m_vTileChanges)
+	{
+		int Layer = Pair.first;
+		pPacker->AddInt(Layer);
+		auto const &Changes = Pair.second;
+		pPacker->AddInt((int)Changes.size()); // row count
+		for(auto const &Change : Changes)
+		{
+			int y = Change.first;
+			pPacker->AddInt(y);
+			auto const &Line = Change.second;
+			pPacker->AddInt((int)Line.size()); // column count
+			for(auto const &Tile : Line)
+			{
+				int x = Tile.first;
+				STileStateChange State = Tile.second;
+				pPacker->AddInt(x);
+				pPacker->AddRaw(&State.m_Previous, sizeof(State.m_Previous));
+				pPacker->AddRaw(&State.m_Current, sizeof(State.m_Current));
+			}
+		}
+	}
+
+	// 2. Speedup tiles
+	pPacker->AddInt((int)m_SpeedupTileChanges.size()); // row count
+	for(auto const &SpeedupChange : m_SpeedupTileChanges)
+	{
+		int y = SpeedupChange.first;
+		pPacker->AddInt(y);
+		auto const &Line = SpeedupChange.second;
+		pPacker->AddInt((int)Line.size()); // column count
+		for(auto const &Tile : Line)
+		{
+			int x = Tile.first;
+			SSpeedupTileStateChange State = Tile.second;
+			pPacker->AddInt(x);
+			pPacker->AddRaw(&State.m_Previous, sizeof(State.m_Previous));
+			pPacker->AddRaw(&State.m_Current, sizeof(State.m_Current));
+		}
+	}
+
+	// 3. Tele tiles
+	pPacker->AddInt((int)m_TeleTileChanges.size()); // row count
+	for(auto const &TeleChange : m_TeleTileChanges)
+	{
+		int y = TeleChange.first;
+		pPacker->AddInt(y);
+		auto const &Line = TeleChange.second;
+		pPacker->AddInt((int)Line.size()); // column count
+		for(auto const &Tile : Line)
+		{
+			int x = Tile.first;
+			STeleTileStateChange State = Tile.second;
+			pPacker->AddInt(x);
+			pPacker->AddRaw(&State.m_Previous, sizeof(State.m_Previous));
+			pPacker->AddRaw(&State.m_Current, sizeof(State.m_Current));
+		}
+	}
+
+	// 4. Switch tiles
+	pPacker->AddInt((int)m_SwitchTileChanges.size()); // row count
+	for(auto const &SwitchChange : m_SwitchTileChanges)
+	{
+		int y = SwitchChange.first;
+		pPacker->AddInt(y);
+		auto const &Line = SwitchChange.second;
+		pPacker->AddInt((int)Line.size()); // column count
+		for(auto const &Tile : Line)
+		{
+			int x = Tile.first;
+			SSwitchTileStateChange State = Tile.second;
+			pPacker->AddInt(x);
+			pPacker->AddRaw(&State.m_Previous, sizeof(State.m_Previous));
+			pPacker->AddRaw(&State.m_Current, sizeof(State.m_Current));
+		}
+	}
+
+	// 5. Tune tiles
+	pPacker->AddInt((int)m_TuneTileChanges.size()); // row count
+	for(auto const &TuneChange : m_TuneTileChanges)
+	{
+		int y = TuneChange.first;
+		pPacker->AddInt(y);
+		auto const &Line = TuneChange.second;
+		pPacker->AddInt((int)Line.size()); // column count
+		for(auto const &Tile : Line)
+		{
+			int x = Tile.first;
+			STuneTileStateChange State = Tile.second;
+			pPacker->AddInt(x);
+			pPacker->AddRaw(&State.m_Previous, sizeof(State.m_Previous));
+			pPacker->AddRaw(&State.m_Current, sizeof(State.m_Current));
+		}
+	}
+}
+
+std::shared_ptr<CEditorBrushDrawAction> CEditorBrushDrawAction::Deserialize(CEditorMap *pMap, class CUnpacker *pUnpacker)
+{
+	int Group = pUnpacker->GetInt();
+	if(pUnpacker->Error()) return nullptr;
+
+	auto pAction = std::make_shared<CEditorBrushDrawAction>(pMap, Group, false);
+
+	// 1. Normal tiles changes
+	int NumLayerChanges = pUnpacker->GetInt();
+	for(int l = 0; l < NumLayerChanges; l++)
+	{
+		int Layer = pUnpacker->GetInt();
+		int NumRows = pUnpacker->GetInt();
+		EditorTileStateChangeHistory<STileStateChange> Changes;
+		for(int r = 0; r < NumRows; r++)
+		{
+			int y = pUnpacker->GetInt();
+			int NumCols = pUnpacker->GetInt();
+			std::map<int, STileStateChange> Line;
+			for(int c = 0; c < NumCols; c++)
+			{
+				int x = pUnpacker->GetInt();
+				const void *pPrevRaw = pUnpacker->GetRaw(sizeof(STileStateChange::m_Previous));
+				const void *pCurrRaw = pUnpacker->GetRaw(sizeof(STileStateChange::m_Current));
+				if(pUnpacker->Error()) return nullptr;
+
+				STileStateChange State;
+				State.m_Changed = true;
+				mem_copy(&State.m_Previous, pPrevRaw, sizeof(State.m_Previous));
+				mem_copy(&State.m_Current, pCurrRaw, sizeof(State.m_Current));
+				Line[x] = State;
+			}
+			Changes[y] = Line;
+		}
+		pAction->m_vTileChanges.push_back({Layer, Changes});
+	}
+
+	// 2. Speedup tiles
+	int NumSpeedupRows = pUnpacker->GetInt();
+	for(int r = 0; r < NumSpeedupRows; r++)
+	{
+		int y = pUnpacker->GetInt();
+		int NumCols = pUnpacker->GetInt();
+		std::map<int, SSpeedupTileStateChange> Line;
+		for(int c = 0; c < NumCols; c++)
+		{
+			int x = pUnpacker->GetInt();
+			const void *pPrevRaw = pUnpacker->GetRaw(sizeof(SSpeedupTileStateChange::m_Previous));
+			const void *pCurrRaw = pUnpacker->GetRaw(sizeof(SSpeedupTileStateChange::m_Current));
+			if(pUnpacker->Error()) return nullptr;
+
+			SSpeedupTileStateChange State;
+			mem_copy(&State.m_Previous, pPrevRaw, sizeof(State.m_Previous));
+			mem_copy(&State.m_Current, pCurrRaw, sizeof(State.m_Current));
+			Line[x] = State;
+		}
+		pAction->m_SpeedupTileChanges[y] = Line;
+	}
+
+	// 3. Tele tiles
+	int NumTeleRows = pUnpacker->GetInt();
+	for(int r = 0; r < NumTeleRows; r++)
+	{
+		int y = pUnpacker->GetInt();
+		int NumCols = pUnpacker->GetInt();
+		std::map<int, STeleTileStateChange> Line;
+		for(int c = 0; c < NumCols; c++)
+		{
+			int x = pUnpacker->GetInt();
+			const void *pPrevRaw = pUnpacker->GetRaw(sizeof(STeleTileStateChange::m_Previous));
+			const void *pCurrRaw = pUnpacker->GetRaw(sizeof(STeleTileStateChange::m_Current));
+			if(pUnpacker->Error()) return nullptr;
+
+			STeleTileStateChange State;
+			mem_copy(&State.m_Previous, pPrevRaw, sizeof(State.m_Previous));
+			mem_copy(&State.m_Current, pCurrRaw, sizeof(State.m_Current));
+			Line[x] = State;
+		}
+		pAction->m_TeleTileChanges[y] = Line;
+	}
+
+	// 4. Switch tiles
+	int NumSwitchRows = pUnpacker->GetInt();
+	for(int r = 0; r < NumSwitchRows; r++)
+	{
+		int y = pUnpacker->GetInt();
+		int NumCols = pUnpacker->GetInt();
+		std::map<int, SSwitchTileStateChange> Line;
+		for(int c = 0; c < NumCols; c++)
+		{
+			int x = pUnpacker->GetInt();
+			const void *pPrevRaw = pUnpacker->GetRaw(sizeof(SSwitchTileStateChange::m_Previous));
+			const void *pCurrRaw = pUnpacker->GetRaw(sizeof(SSwitchTileStateChange::m_Current));
+			if(pUnpacker->Error()) return nullptr;
+
+			SSwitchTileStateChange State;
+			mem_copy(&State.m_Previous, pPrevRaw, sizeof(State.m_Previous));
+			mem_copy(&State.m_Current, pCurrRaw, sizeof(State.m_Current));
+			Line[x] = State;
+		}
+		pAction->m_SwitchTileChanges[y] = Line;
+	}
+
+	// 5. Tune tiles
+	int NumTuneRows = pUnpacker->GetInt();
+	for(int r = 0; r < NumTuneRows; r++)
+	{
+		int y = pUnpacker->GetInt();
+		int NumCols = pUnpacker->GetInt();
+		std::map<int, STuneTileStateChange> Line;
+		for(int c = 0; c < NumCols; c++)
+		{
+			int x = pUnpacker->GetInt();
+			const void *pPrevRaw = pUnpacker->GetRaw(sizeof(STuneTileStateChange::m_Previous));
+			const void *pCurrRaw = pUnpacker->GetRaw(sizeof(STuneTileStateChange::m_Current));
+			if(pUnpacker->Error()) return nullptr;
+
+			STuneTileStateChange State;
+			mem_copy(&State.m_Previous, pPrevRaw, sizeof(State.m_Previous));
+			mem_copy(&State.m_Current, pCurrRaw, sizeof(State.m_Current));
+			Line[x] = State;
+		}
+		pAction->m_TuneTileChanges[y] = Line;
+	}
+
+	if(pUnpacker->Error()) return nullptr;
+	pAction->SetInfos();
+	str_format(pAction->m_aDisplayText, sizeof(pAction->m_aDisplayText), "Brush draw (x%d) on %d layers", pAction->m_TotalTilesDrawn, pAction->m_TotalLayers);
+	return pAction;
+}
+
 
 // -------------------------------------------
 

@@ -23,8 +23,8 @@ public:
 	}
 
 	void RecordAction(const std::shared_ptr<IEditorAction> &pAction);
-	void RecordAction(const std::shared_ptr<IEditorAction> &pAction, const char *pDisplay);
-	void Execute(const std::shared_ptr<IEditorAction> &pAction, const char *pDisplay = nullptr);
+	void RecordAction(const std::shared_ptr<IEditorAction> &pAction, const char *pDisplay, bool Remote = false);
+	void Execute(const std::shared_ptr<IEditorAction> &pAction, const char *pDisplay = nullptr, bool Remote = false);
 
 	bool Undo();
 	bool Redo();

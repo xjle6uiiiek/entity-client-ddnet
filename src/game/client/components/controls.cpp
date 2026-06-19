@@ -27,6 +27,7 @@ CControls::CControls()
 	std::fill(std::begin(m_aMousePosOnAction), std::end(m_aMousePosOnAction), vec2(0.0f, 0.0f));
 	std::fill(std::begin(m_aTargetPos), std::end(m_aTargetPos), vec2(0.0f, 0.0f));
 	std::fill(std::begin(m_aMouseInputType), std::end(m_aMouseInputType), EMouseInputType::ABSOLUTE);
+	std::fill(std::begin(m_aInputAlignX), std::end(m_aInputAlignX), 0); // EClient
 }
 
 void CControls::OnReset()
@@ -138,6 +139,12 @@ void CControls::OnConsoleInit()
 	{
 		static CInputState s_State = {this, {&m_aShowHookColl[0], &m_aShowHookColl[1]}};
 		Console()->Register("+showhookcoll", "", CFGFLAG_CLIENT, ConKeyInputState, &s_State, "Show Hook Collision");
+	}
+
+	// EClient: held bind that auto-aligns the local tee's X with the tee directly below
+	{
+		static CInputState s_State = {this, {&m_aInputAlignX[0], &m_aInputAlignX[1]}};
+		Console()->Register("+alignx", "", CFGFLAG_CLIENT, ConKeyInputState, &s_State, "Auto-align X with the tee below you");
 	}
 
 	{
@@ -318,6 +325,10 @@ int CControls::SnapInput(int *pData)
 			pDummyInput->m_Hook = g_Config.m_ClDummyHook;
 			m_aInputData[!g_Config.m_ClDummy] = *pDummyInput;
 		}
+
+		// EClient: auto-align X with the tee directly below while +alignx is held.
+		// Done after dummy copy/control so it only affects the actively controlled tee.
+		ApplyAlignX(g_Config.m_ClDummy, m_aInputData[g_Config.m_ClDummy].m_Direction);
 
 		// stress testing
 		if(g_Config.m_DbgStress)
@@ -523,6 +534,9 @@ bool CControls::CheckNewInput()
 				TestInput.m_Direction = -1;
 			if(!m_aInputDirectionLeft[Dummy] && m_aInputDirectionRight[Dummy])
 				TestInput.m_Direction = 1;
+
+			// EClient: keep the sub-tick/fast input path consistent with SnapInput's auto-align.
+			ApplyAlignX(Dummy, TestInput.m_Direction);
 		}
 
 		if(m_aFastInput[Dummy].m_Direction != TestInput.m_Direction)
@@ -579,4 +593,81 @@ bool CControls::CheckNewInput()
 		return true;
 	else
 		return false;
+}
+
+void CControls::ApplyAlignX(int Dummy, int &Direction)
+{
+	// EClient: while the +alignx bind is held, drive left/right so the local tee's X
+	// converges on the tee directly below it. No-op if not held or no suitable target.
+	if(Dummy != g_Config.m_ClDummy)
+		return;
+	if(!m_aInputAlignX[g_Config.m_ClDummy])
+		return;
+
+	const int LocalId = GameClient()->m_Snap.m_LocalClientId;
+	if(LocalId < 0)
+		return;
+
+	const vec2 MyPos = GameClient()->m_LocalCharacterPos;
+	const float MaxHDist = (float)g_Config.m_ClAlignXMaxHorizontalDist;
+	const float MinVDrop = (float)g_Config.m_ClAlignXMinVerticalDrop;
+
+	// Find the closest tee (by horizontal distance) that is below us and roughly on the same vertical.
+	int TargetId = -1;
+	float BestHDist = 0.0f;
+	for(int ClientId = 0; ClientId < MAX_CLIENTS; ClientId++)
+	{
+		if(ClientId == LocalId)
+			continue;
+		if(!GameClient()->m_Snap.m_aCharacters[ClientId].m_Active)
+			continue;
+		if(!GameClient()->m_aClients[ClientId].m_Active)
+			continue;
+		if(!GameClient()->m_aClients[ClientId].m_RenderInfo.Valid())
+			continue;
+
+		const vec2 TheirPos = GameClient()->m_aClients[ClientId].m_RenderPos;
+		if(TheirPos.y < MyPos.y + MinVDrop)
+			continue; // not below us enough
+
+		const float HDist = std::abs(TheirPos.x - MyPos.x);
+		if(HDist > MaxHDist)
+			continue; // not on the same vertical
+
+		if(TargetId < 0 || HDist < BestHDist)
+		{
+			TargetId = ClientId;
+			BestHDist = HDist;
+		}
+	}
+
+	if(TargetId < 0)
+	{
+		Direction = 0; // nothing to align to, stand still instead of guessing
+		return;
+	}
+
+	const float TargetX = GameClient()->m_aClients[TargetId].m_RenderPos.x;
+	const float Tolerance = (float)g_Config.m_ClAlignXTolerance;
+
+	// ponytail: predictive braking using game physics.
+	// velocity decays by ~0.5x per tick on ground. Coasting distance is roughly 1.0x velocity.
+	// we use 1.2x to brake a tiny bit early and avoid overshooting.
+	// also add a hard 1.0px deadzone when nearly stopped to prevent 1-tick oscillation when Tolerance=0.
+	const float Dist = TargetX - MyPos.x;
+	const float VelX = GameClient()->m_PredictedChar.m_Vel.x;
+	const float StopX = MyPos.x + VelX * 1.2f;
+
+	if(std::abs(Dist) <= Tolerance || (std::abs(Dist) < 1.0f && std::abs(VelX) < 0.5f))
+	{
+		Direction = 0;
+	}
+	else if(Dist > 0)
+	{
+		Direction = (StopX >= TargetX) ? 0 : 1;
+	}
+	else
+	{
+		Direction = (StopX <= TargetX) ? 0 : -1;
+	}
 }

@@ -272,6 +272,11 @@ MACRO_CONFIG_INT(ClFreezeKillNotMoving, ec_freeze_kill_not_moving, 1, 0, 1, CFGF
 
 MACRO_CONFIG_INT(ClFreezeKillDebug, ec_freeze_kill_debug, 0, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "debug")
 
+// Auto Align X (held bind "+alignx"): auto-press left/right to align your X with a tee that is directly below you
+MACRO_CONFIG_INT(ClAlignXTolerance, ec_align_x_tolerance, 2, 0, 500, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Dead zone (in pixels) where alignment is considered done")
+MACRO_CONFIG_INT(ClAlignXMaxHorizontalDist, ec_align_x_max_h_dist, 200, 0, 5000, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Max horizontal distance (in pixels) for a tee to count as 'directly below'")
+MACRO_CONFIG_INT(ClAlignXMinVerticalDrop, ec_align_x_min_v_drop, 16, 0, 5000, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Min vertical drop (in pixels) the target tee must be below you")
+
 // Ui/Sound
 MACRO_CONFIG_INT(SndFriendChat, snd_friend_chat, 0, 0, 1, CFGFLAG_SAVE | CFGFLAG_CLIENT, "Enable regular Chat Sound Only When a Friend Says Something") // Aiodob Menu color plates
 
@@ -373,6 +378,8 @@ MACRO_CONFIG_INT(TcBgDrawFadeTime, ec_bg_draw_fade_time, 0, 0, 600, CFGFLAG_CLIE
 MACRO_CONFIG_INT(TcBgDrawMaxItems, ec_bg_draw_max_items, 128, 0, 2048, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Maximum number of strokes")
 MACRO_CONFIG_COL(TcBgDrawColor, ec_bg_draw_color, 11893936, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Color of background draw strokes")
 MACRO_CONFIG_INT(TcBgDrawAutoSaveLoad, ec_bg_draw_auto_save_load, 0, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Automatically save and load background drawings")
+MACRO_CONFIG_STR(TcBgDrawLastIp, ec_bg_draw_last_ip, 32, "127.0.0.1", CFGFLAG_CLIENT | CFGFLAG_SAVE, "Last P2P draw host IP")
+MACRO_CONFIG_INT(TcBgDrawLastPort, ec_bg_draw_last_port, 8000, 0, 65535, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Last P2P draw host port")
 
 // Timer
 MACRO_CONFIG_INT(TcShowLocalTimeSeconds, ec_show_local_time_seconds, 0, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Show local time in seconds")

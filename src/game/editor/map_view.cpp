@@ -2,6 +2,8 @@
 
 #include "editor.h"
 
+#include <engine/client.h>
+
 #include <engine/keys.h>
 #include <engine/shared/config.h>
 
@@ -114,6 +116,61 @@ void CMapView::RenderEditorMap()
 	{
 		Map()->SelectedGroup()->MapScreen();
 		pSelectedTilesLayer->ShowInfo();
+	}
+
+	// Render remote creators' cursors
+	if(Client()->State() == IClient::STATE_ONLINE && !Editor()->m_RemoteCreators.empty())
+	{
+		Map()->m_pGameGroup->MapScreen();
+
+		// Set color for name text
+		TextRender()->TextColor(1.0f, 1.0f, 1.0f, 1.0f);
+		TextRender()->TextOutlineColor(0.0f, 0.0f, 0.0f, 0.5f);
+
+		// Draw remote cursors
+		for(auto const &Pair : Editor()->m_RemoteCreators)
+		{
+			SCreatorInfo const &Info = Pair.second;
+
+			// Assign a unique color based on ClientId
+			float r = 0.1f + 0.9f * (float)(Info.m_ClientId % 3 == 0);
+			float g = 0.1f + 0.9f * (float)(Info.m_ClientId % 3 == 1);
+			float b = 0.1f + 0.9f * (float)(Info.m_ClientId % 3 == 2);
+			if(r < 0.2f && g < 0.2f && b < 0.2f) { r = 0.8f; g = 0.8f; b = 0.8f; }
+
+			// Cross size scales based on zoom level
+			float Size = 12.0f * (Zoom()->GetValue() / 100.0f);
+			if(Size < 2.0f) Size = 2.0f;
+			if(Size > 32.0f) Size = 32.0f;
+
+			// Draw a small cross using lines
+			Graphics()->TextureClear();
+			Graphics()->QuadsBegin();
+			Graphics()->SetColor(r, g, b, 0.8f);
+
+			// Horizontal line
+			IGraphics::CQuadItem Horiz(Info.m_CursorPos.x - Size, Info.m_CursorPos.y - 1.0f, Size * 2, 2.0f);
+			Graphics()->QuadsDrawTL(&Horiz, 1);
+
+			// Vertical line
+			IGraphics::CQuadItem Vert(Info.m_CursorPos.x - 1.0f, Info.m_CursorPos.y - Size, 2.0f, Size * 2);
+			Graphics()->QuadsDrawTL(&Vert, 1);
+
+			Graphics()->QuadsEnd();
+
+			// Render user name next to cursor
+			IGameClient *pGameClient = (IGameClient *)Editor()->Kernel()->RequestInterface<IGameClient>();
+			const char *pName = pGameClient->GetClientName(Info.m_ClientId);
+			if(pName && pName[0])
+			{
+				float TextSize = 10.0f * (Zoom()->GetValue() / 100.0f);
+				if(TextSize < 4.0f) TextSize = 4.0f;
+				if(TextSize > 24.0f) TextSize = 24.0f;
+
+				TextRender()->TextColor(r, g, b, 1.0f);
+				TextRender()->Text(Info.m_CursorPos.x + Size + 2.0f, Info.m_CursorPos.y - TextSize / 2.0f, TextSize, pName);
+			}
+		}
 	}
 }
 

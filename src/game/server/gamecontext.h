@@ -133,6 +133,8 @@ class CGameContext : public IGameServer
 	CMapBugs m_MapBugs;
 	CPrng m_Prng;
 
+	std::map<std::pair<int, int>, int> m_EditorLocks; // (GroupIndex, LayerIndex) -> ClientId
+
 	bool m_Resetting;
 
 	static void CommandCallback(int ClientId, int FlagMask, const char *pCmd, IConsole::IResult *pResult, void *pUser);
@@ -362,6 +364,13 @@ public:
 	void OnKillNetMessage(const CNetMsg_Cl_Kill *pMsg, int ClientId);
 	void OnEnableSpectatorCountNetMessage(const CNetMsg_Cl_EnableSpectatorCount *pMsg, int ClientId);
 	void OnStartInfoNetMessage(const CNetMsg_Cl_StartInfo *pMsg, int ClientId);
+	
+	// Collaborative Map Editor message handlers
+	void OnEditorSessionInit(int ClientId, class CUnpacker *pUnpacker);
+	void OnEditorAction(int ClientId, class CUnpacker *pUnpacker);
+	void OnEditorCursor(int ClientId, class CUnpacker *pUnpacker);
+	void OnEditorLock(int ClientId, class CUnpacker *pUnpacker);
+	void OnEditorSyncStatus(int ClientId, class CUnpacker *pUnpacker);
 
 	bool OnClientDataPersist(int ClientId, void *pData) override;
 	void OnClientConnected(int ClientId, void *pData) override;

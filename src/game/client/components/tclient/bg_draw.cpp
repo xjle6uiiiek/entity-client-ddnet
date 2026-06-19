@@ -193,6 +193,7 @@ private:
 public:
 	bool m_Killed = false;
 	float m_SecondsAge = 0.0f;
+	float m_Lifetime = 0.0f;
 
 	const CBgDrawItemData &Data() const { return m_Data; }
 	const CBoundingBox &BoundingBox() const { return m_BoundingBox; }
@@ -213,8 +214,7 @@ public:
 	{
 		if(!m_Drawing)
 			return false;
-		if(m_Data.size() > BG_DRAW_MAX_POINTS_PER_ITEM)
-			return PenUp(Point.Pos());
+		// Length limit removed
 		if(m_Data.size() >= 2 && distance((m_Data.end() - 2)->Pos(), (m_Data.end() - 1)->Pos()) < Point.w * 0.75f)
 			*(m_Data.end() - 1) = Point;
 		else
@@ -226,6 +226,20 @@ public:
 	{
 		return MoveTo(CBgDrawItemDataPoint(Pos, CurrentWidth(), CurrentColor()));
 	}
+
+	void PopFrontPoints(size_t Num)
+	{
+		if(Num == 0 || m_Data.empty()) return;
+		if(Num >= m_Data.size()) {
+			m_Data.clear();
+		} else {
+			m_Data.erase(m_Data.begin(), m_Data.begin() + Num);
+		}
+		m_PathContainer.Update(m_Data);
+	}
+
+	size_t OriginalSize = 0; // To keep track of original length for smooth fading
+
 	bool PointIntersect(const vec2 Pos, const float Radius) const
 	{
 		if(m_Data.empty())
@@ -280,12 +294,14 @@ public:
 	{
 		m_BoundingBox.ExtendBoundingBox(StartPos, CurrentWidth());
 		m_Data.emplace_back(StartPos, CurrentWidth(), CurrentColor());
+		m_Lifetime = (float)g_Config.m_TcBgDrawFadeTime;
 	}
 	CBgDrawItem(CGameClient &This, CBgDrawItemDataPoint StartPoint) :
 		CBgDrawItem(This, StartPoint.Pos())
 	{
 		m_Data.clear();
 		m_Data.push_back(StartPoint);
+		m_Lifetime = (float)g_Config.m_TcBgDrawFadeTime;
 	}
 	CBgDrawItem(CGameClient &This, const CBgDrawItemData &Data) :
 		CBgDrawItem(This, Data[0])
@@ -323,6 +339,12 @@ void CBgDraw::ConBgDrawReset(IConsole::IResult *pResult, void *pUserData)
 {
 	CBgDraw *pThis = (CBgDraw *)pUserData;
 	pThis->Reset();
+	if(pThis->m_IsNetActive)
+	{
+		CNetBgDrawPacket Pkt;
+		Pkt.m_Type = 4; // RESET
+		pThis->SendToClients(&Pkt, sizeof(Pkt));
+	}
 }
 
 void CBgDraw::ConBgDrawSave(IConsole::IResult *pResult, void *pUserData)
@@ -484,6 +506,8 @@ void CBgDraw::OnConsoleInit()
 	Console()->Register("bg_draw_reset", "", CFGFLAG_CLIENT, ConBgDrawReset, this, "Reset all drawings on the background");
 	Console()->Register("bg_draw_save", "?r[filename]", CFGFLAG_CLIENT, ConBgDrawSave, this, "Save drawings to a given csv file (defaults to map name)");
 	Console()->Register("bg_draw_load", "?r[filename]", CFGFLAG_CLIENT, ConBgDrawLoad, this, "Load drawings from a given csv file (defaults to map name)");
+	Console()->Register("draw_host", "i", CFGFLAG_CLIENT, ConBgDrawHost, this, "Host P2P drawing session on specified port");
+	Console()->Register("draw_connect", "?s?i", CFGFLAG_CLIENT, ConBgDrawConnect, this, "Connect to P2P drawing session (IP Port)");
 }
 
 void CBgDraw::OnRender()
@@ -491,6 +515,7 @@ void CBgDraw::OnRender()
 	if(Client()->State() != IClient::STATE_ONLINE && Client()->State() != IClient::STATE_DEMOPLAYBACK)
 		return;
 
+	ProcessPackets();
 	Graphics()->TextureClear();
 
 	float Delta = Client()->RenderFrameTime();
@@ -516,14 +541,52 @@ void CBgDraw::OnRender()
 		if(Input == InputMode::DRAW)
 		{
 			if(ActiveItem.has_value())
+			{
 				(*ActiveItem)->MoveTo(Pos);
+				if(m_IsNetActive)
+				{
+					CNetBgDrawPacket Pkt;
+					Pkt.m_Type = 1; // POINT
+					Pkt.m_StrokeId = m_LocalStrokeId + Dummy;
+					Pkt.x = Pos.x; Pkt.y = Pos.y;
+					Pkt.w = (float)g_Config.m_TcBgDrawWidth * GameClient()->m_Camera.m_Zoom;
+					ColorRGBA Col = color_cast<ColorRGBA>(ColorHSLA(g_Config.m_TcBgDrawColor));
+					Pkt.r = Col.r; Pkt.g = Col.g; Pkt.b = Col.b; Pkt.a = Col.a; Pkt.m_Lifetime = (float)g_Config.m_TcBgDrawFadeTime;
+					SendToClients(&Pkt, sizeof(Pkt));
+				}
+			}
 			else
+			{
 				ActiveItem = AddItem(*GameClient(), Pos);
+				if(m_IsNetActive)
+				{
+					m_LocalStrokeId = rand(); // new random stroke id
+					CNetBgDrawPacket Pkt;
+					Pkt.m_Type = 0; // NEW
+					Pkt.m_StrokeId = m_LocalStrokeId + Dummy;
+					Pkt.x = Pos.x; Pkt.y = Pos.y;
+					Pkt.w = (float)g_Config.m_TcBgDrawWidth * GameClient()->m_Camera.m_Zoom;
+					ColorRGBA Col = color_cast<ColorRGBA>(ColorHSLA(g_Config.m_TcBgDrawColor));
+					Pkt.r = Col.r; Pkt.g = Col.g; Pkt.b = Col.b; Pkt.a = Col.a; Pkt.m_Lifetime = (float)g_Config.m_TcBgDrawFadeTime;
+					SendToClients(&Pkt, sizeof(Pkt));
+				}
+			}
 			m_Dirty = true;
 		}
 		else if(ActiveItem.has_value())
 		{
 			(*ActiveItem)->PenUp(Pos);
+			if(m_IsNetActive)
+			{
+				CNetBgDrawPacket Pkt;
+				Pkt.m_Type = 2; // END
+				Pkt.m_StrokeId = m_LocalStrokeId + Dummy;
+				Pkt.x = Pos.x; Pkt.y = Pos.y;
+				Pkt.w = (float)g_Config.m_TcBgDrawWidth * GameClient()->m_Camera.m_Zoom;
+				ColorRGBA Col = color_cast<ColorRGBA>(ColorHSLA(g_Config.m_TcBgDrawColor));
+				Pkt.r = Col.r; Pkt.g = Col.g; Pkt.b = Col.b; Pkt.a = Col.a; Pkt.m_Lifetime = (float)g_Config.m_TcBgDrawFadeTime;
+				SendToClients(&Pkt, sizeof(Pkt));
+			}
 			ActiveItem = std::nullopt;
 		}
 		std::optional<vec2> &LastPos = m_aLastPos[Dummy];
@@ -540,6 +603,17 @@ void CBgDraw::OnRender()
 				for(CBgDrawItem &Item : *m_pvItems)
 					if(Item.PointIntersect(Pos, 2.0f))
 						Item.m_Killed = true;
+			}
+			
+			if(m_IsNetActive)
+			{
+				CNetBgDrawPacket Pkt;
+				Pkt.m_Type = 3; // ERASE
+				Pkt.m_StrokeId = 0;
+				Pkt.x = Pos.x; Pkt.y = Pos.y;
+				Pkt.w = 2.0f * GameClient()->m_Camera.m_Zoom; // Approx erase width
+				Pkt.r = 0; Pkt.g = 0; Pkt.b = 0; Pkt.a = 0;
+				SendToClients(&Pkt, sizeof(Pkt));
 			}
 		}
 		else
@@ -564,8 +638,21 @@ void CBgDraw::OnRender()
 		else
 		{
 			Item.m_SecondsAge += Delta;
-			if(g_Config.m_TcBgDrawFadeTime > 0 && Item.m_SecondsAge > (float)g_Config.m_TcBgDrawFadeTime)
-				Item.m_Killed = true;
+			if(Item.m_Lifetime > 0.0f)
+			{
+				if (Item.OriginalSize == 0) Item.OriginalSize = Item.Data().size();
+				float FadeTime = Item.m_Lifetime;
+				float FadeOutStart = FadeTime * 0.5f; // Start fading in second half of lifetime
+				if(Item.m_SecondsAge > FadeTime)
+					Item.m_Killed = true;
+				else if(Item.m_SecondsAge > FadeOutStart)
+				{
+					float Progress = (Item.m_SecondsAge - FadeOutStart) / (FadeTime - FadeOutStart);
+					size_t TargetSize = (size_t)((1.0f - Progress) * Item.OriginalSize);
+					if(TargetSize < Item.Data().size())
+						Item.PopFrontPoints(Item.Data().size() - TargetSize);
+				}
+			}
 		}
 		const bool InRangeX = Item.BoundingBox().m_Min.x < ScreenX1 || Item.BoundingBox().m_Max.x > ScreenX0;
 		const bool InRangeY = Item.BoundingBox().m_Min.y < ScreenY1 || Item.BoundingBox().m_Max.y > ScreenY0;
@@ -614,9 +701,166 @@ void CBgDraw::OnShutdown()
 CBgDraw::CBgDraw() :
 	m_pvItems(new std::list<CBgDrawItem>())
 {
+	m_Socket = nullptr;
+	m_IsHost = false;
+	m_IsNetActive = false;
+	m_LocalStrokeId = 0;
 }
 
 CBgDraw::~CBgDraw()
 {
+	if(m_Socket != nullptr) { net_udp_close(m_Socket); m_Socket = nullptr; }
 	delete m_pvItems;
+}
+
+void CBgDraw::ConBgDrawHost(IConsole::IResult *pResult, void *pUserData)
+{
+	CBgDraw *pSelf = (CBgDraw *)pUserData;
+	if(pSelf->m_Socket != nullptr && net_socket_type(pSelf->m_Socket) != NETTYPE_INVALID)
+		net_udp_close(pSelf->m_Socket);
+
+	NETADDR BindAddr;
+	mem_zero(&BindAddr, sizeof(BindAddr));
+	BindAddr.type = NETTYPE_IPV4;
+	BindAddr.port = pResult->GetInteger(0);
+
+	pSelf->m_Socket = net_udp_create(BindAddr);
+	if(pSelf->m_Socket != nullptr && net_socket_type(pSelf->m_Socket) != NETTYPE_INVALID)
+	{
+		pSelf->m_IsHost = true;
+		pSelf->m_IsNetActive = true;
+		pSelf->m_vClients.clear();
+		pSelf->m_NetActiveItems.clear();
+		pSelf->Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "bg_draw", "Successfully hosted P2P drawing session.");
+	}
+	else
+	{
+		pSelf->Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "bg_draw", "Failed to host P2P drawing session.");
+	}
+}
+
+void CBgDraw::ConBgDrawConnect(IConsole::IResult *pResult, void *pUserData)
+{
+	CBgDraw *pSelf = (CBgDraw *)pUserData;
+	if(pSelf->m_Socket != nullptr && net_socket_type(pSelf->m_Socket) != NETTYPE_INVALID)
+		net_udp_close(pSelf->m_Socket);
+
+	NETADDR HostAddr;
+	if(net_host_lookup(pResult->GetString(0), &HostAddr, NETTYPE_IPV4) != 0)
+	{
+		pSelf->Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "bg_draw", "Failed to resolve host IP.");
+		return;
+	}
+	HostAddr.port = pResult->GetInteger(1);
+
+	NETADDR BindAddr;
+	mem_zero(&BindAddr, sizeof(BindAddr));
+	BindAddr.type = HostAddr.type;
+	BindAddr.port = 0;
+
+	pSelf->m_Socket = net_udp_create(BindAddr);
+	if(pSelf->m_Socket != nullptr && net_socket_type(pSelf->m_Socket) != NETTYPE_INVALID)
+	{
+		pSelf->m_IsHost = false;
+		pSelf->m_IsNetActive = true;
+		pSelf->m_vClients.clear();
+		pSelf->m_vClients.push_back(HostAddr);
+		pSelf->m_NetActiveItems.clear();
+
+		CNetBgDrawPacket P;
+		mem_zero(&P, sizeof(P));
+		P.m_Type = 5; // CONNECT
+		net_udp_send(pSelf->m_Socket, &HostAddr, &P, sizeof(P));
+
+		pSelf->Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "bg_draw", "Connected to P2P drawing session.");
+	}
+	else
+	{
+		pSelf->Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "bg_draw", "Failed to create socket for P2P drawing.");
+	}
+}
+
+void CBgDraw::SendToClients(const void *pData, int Size, const NETADDR *pIgnore)
+{
+	if(!m_IsNetActive) return;
+
+	for(const auto& Addr : m_vClients)
+	{
+		if(pIgnore && net_addr_comp(&Addr, pIgnore) == 0)
+			continue;
+		net_udp_send(m_Socket, &Addr, pData, Size);
+	}
+}
+
+void CBgDraw::ProcessPackets()
+{
+	if(!m_IsNetActive || m_Socket == nullptr || net_socket_type(m_Socket) == NETTYPE_INVALID) return;
+
+	NETADDR Addr;
+	unsigned char *pData;
+	int Bytes;
+
+	while((Bytes = net_udp_recv(m_Socket, &Addr, &pData)) > 0)
+	{
+		if(Bytes == sizeof(CNetBgDrawPacket))
+		{
+			CNetBgDrawPacket *pPkt = (CNetBgDrawPacket*)pData;
+
+			if(m_IsHost)
+			{
+				bool Found = false;
+				for(const auto& C : m_vClients)
+				{
+					if(net_addr_comp(&C, &Addr) == 0)
+					{
+						Found = true;
+						break;
+					}
+				}
+				if(!Found)
+				{
+					m_vClients.push_back(Addr);
+				}
+				
+				// Relay if it's drawing data
+				if(pPkt->m_Type != 5) // CONNECT
+					SendToClients(pPkt, sizeof(CNetBgDrawPacket), &Addr);
+			}
+
+			if(pPkt->m_Type == 0) // NEW
+			{
+				CBgDrawItemDataPoint Pt(pPkt->x, pPkt->y, pPkt->w, pPkt->r, pPkt->g, pPkt->b, pPkt->a);
+				CBgDrawItem* pItem = AddItem(*GameClient(), Pt);
+				if(pItem) pItem->m_Lifetime = pPkt->m_Lifetime;
+				m_NetActiveItems[pPkt->m_StrokeId] = pItem;
+			}
+			else if(pPkt->m_Type == 1) // POINT
+			{
+				if(m_NetActiveItems.count(pPkt->m_StrokeId))
+				{
+					CBgDrawItemDataPoint Pt(pPkt->x, pPkt->y, pPkt->w, pPkt->r, pPkt->g, pPkt->b, pPkt->a);
+					m_NetActiveItems[pPkt->m_StrokeId]->MoveTo(Pt);
+				}
+			}
+			else if(pPkt->m_Type == 2) // END
+			{
+				if(m_NetActiveItems.count(pPkt->m_StrokeId))
+				{
+					CBgDrawItemDataPoint Pt(pPkt->x, pPkt->y, pPkt->w, pPkt->r, pPkt->g, pPkt->b, pPkt->a);
+					m_NetActiveItems[pPkt->m_StrokeId]->PenUp(Pt);
+					m_NetActiveItems.erase(pPkt->m_StrokeId);
+				}
+			}
+			else if(pPkt->m_Type == 3) // ERASE
+			{
+				for(CBgDrawItem &Item : *m_pvItems)
+					if(Item.PointIntersect(vec2(pPkt->x, pPkt->y), pPkt->w))
+						Item.m_Killed = true;
+			}
+			else if(pPkt->m_Type == 4) // RESET
+			{
+				Reset();
+			}
+		}
+	}
 }

@@ -2570,6 +2570,24 @@ void CEditor::RenderLayers(CUIRect LayersBox)
 				}
 			}
 
+			// Append lock label if the layer is locked by another client
+			if(Client()->State() == IClient::STATE_ONLINE)
+			{
+				std::pair<int, int> Key(g, i);
+				auto itLock = m_RemoteLocks.find(Key);
+				if(itLock != m_RemoteLocks.end())
+				{
+					IGameClient *pGameClient = (IGameClient *)Kernel()->RequestInterface<IGameClient>();
+					const char *pLockName = pGameClient->GetClientName(itLock->second);
+					char aLockLabel[128];
+					str_format(aLockLabel, sizeof(aLockLabel), " [Lock: %s]", (pLockName && pLockName[0]) ? pLockName : "Unknown");
+					
+					char aBufCopy[128];
+					str_copy(aBufCopy, aBuf);
+					str_format(aBuf, sizeof(aBuf), "%s%s", aBufCopy, aLockLabel);
+				}
+			}
+
 			int Checked = IsLayerSelected ? 1 : 0;
 			if(Map()->m_vpGroups[g]->m_vpLayers[i]->IsEntitiesLayer())
 			{
@@ -3695,7 +3713,7 @@ void CEditor::RenderMenubar(CUIRect MenuBar)
 	if(DoButton_Ex(&s_FileButton, "File", 0, &FileButton, BUTTONFLAG_LEFT, nullptr, IGraphics::CORNER_T, EditorFontSizes::MENU, TEXTALIGN_ML))
 	{
 		static SPopupMenuId s_PopupMenuFileId;
-		Ui()->DoPopupMenu(&s_PopupMenuFileId, FileButton.x, FileButton.y + FileButton.h - 1.0f, 120.0f, 188.0f, this, PopupMenuFile, PopupProperties);
+		Ui()->DoPopupMenu(&s_PopupMenuFileId, FileButton.x, FileButton.y + FileButton.h - 1.0f, 120.0f, 216.0f, this, PopupMenuFile, PopupProperties);
 	}
 
 	MenuBar.VSplitLeft(5.0f, nullptr, &MenuBar);
@@ -4592,11 +4610,105 @@ IGraphics::CTextureHandle CEditor::GetTuneTexture()
 	return m_TuneTexture;
 }
 
+#include <engine/shared/protocol_ex.h>
+#include <engine/shared/packer.h>
+
 IGraphics::CTextureHandle CEditor::GetEntitiesTexture()
 {
 	if(!m_EntitiesTexture.IsValid())
 		m_EntitiesTexture = Graphics()->LoadTexture("editor/entities/DDNet.png", IStorage::TYPE_ALL, Graphics()->TextureLoadFlags());
 	return m_EntitiesTexture;
+}
+
+void CEditor::OnMessage(int MsgId, class CUnpacker *pUnpacker)
+{
+	dbg_msg("collab_debug", "CEditor::OnMessage: MsgId=%d", MsgId);
+	// Stubs for cooperative editor messages
+	if(MsgId == NETMSG_EDITOR_SESSION_INIT)
+	{
+		dbg_msg("editor", "Received NETMSG_EDITOR_SESSION_INIT");
+	}
+	else if(MsgId == NETMSG_EDITOR_ACTION)
+	{
+		dbg_msg("collab_debug", "Received NETMSG_EDITOR_ACTION from server!");
+		int ActionType = pUnpacker->GetInt();
+		if(pUnpacker->Error())
+			return;
+
+		if(ActionType == 1) // Brush Draw Action
+		{
+			auto pAction = CEditorBrushDrawAction::Deserialize(Map(), pUnpacker);
+			if(pAction)
+			{
+				Map()->m_EditorHistory.Execute(pAction, nullptr, true);
+			}
+		}
+	}
+	else if(MsgId == NETMSG_EDITOR_CURSOR)
+	{
+		int CreatorId = pUnpacker->GetInt();
+		int CursorX = pUnpacker->GetInt();
+		int CursorY = pUnpacker->GetInt();
+		int ActiveLayer = pUnpacker->GetInt();
+		if(pUnpacker->Error())
+			return;
+
+		auto it = m_RemoteCreators.find(CreatorId);
+		if(it == m_RemoteCreators.end())
+		{
+			SCreatorInfo Info;
+			Info.m_ClientId = CreatorId;
+			Info.m_CursorPos = vec2(CursorX, CursorY);
+			Info.m_TargetPos = vec2(CursorX, CursorY);
+			Info.m_ActiveLayer = ActiveLayer;
+			Info.m_LastUpdate = Client()->LocalTime();
+			m_RemoteCreators[CreatorId] = Info;
+		}
+		else
+		{
+			it->second.m_TargetPos = vec2(CursorX, CursorY);
+			it->second.m_ActiveLayer = ActiveLayer;
+			it->second.m_LastUpdate = Client()->LocalTime();
+		}
+	}
+	else if(MsgId == NETMSG_EDITOR_LOCK)
+	{
+		int OwnerId = pUnpacker->GetInt();
+		int GroupIndex = pUnpacker->GetInt();
+		int LayerIndex = pUnpacker->GetInt();
+		int LockType = pUnpacker->GetInt();
+		if(pUnpacker->Error())
+			return;
+
+		std::pair<int, int> Key(GroupIndex, LayerIndex);
+		if(LockType == 1) // Locked
+		{
+			m_RemoteLocks[Key] = OwnerId;
+			dbg_msg("editor", "Layer (Group=%d, Layer=%d) locked by ClientId=%d", GroupIndex, LayerIndex, OwnerId);
+		}
+		else if(LockType == 0) // Unlocked
+		{
+			m_RemoteLocks.erase(Key);
+			dbg_msg("editor", "Layer (Group=%d, Layer=%d) unlocked", GroupIndex, LayerIndex);
+		}
+		else if(LockType == 2) // Lock Denied
+		{
+			dbg_msg("editor", "Lock request denied for Layer (Group=%d, Layer=%d) (owned by ClientId=%d)", GroupIndex, LayerIndex, OwnerId);
+			m_RemoteLocks[Key] = OwnerId;
+
+			if(m_MyLockedGroup == GroupIndex && m_MyLockedLayer == LayerIndex)
+			{
+				m_MyLockedGroup = -1;
+				m_MyLockedLayer = -1;
+				Map()->m_vSelectedLayers.clear();
+				str_copy(m_aTooltip, "Layer locked by another creator!");
+			}
+		}
+	}
+	else if(MsgId == NETMSG_EDITOR_SYNC_STATUS)
+	{
+		dbg_msg("editor", "Received NETMSG_EDITOR_SYNC_STATUS");
+	}
 }
 
 void CEditor::Init()
@@ -4853,6 +4965,111 @@ void CEditor::OnRender()
 #if defined(CONF_DEBUG)
 	Map()->CheckIntegrity();
 #endif
+
+	// Collaborative session cursor sync and locks
+	if(Client()->State() == IClient::STATE_ONLINE)
+	{
+		if(!m_CollabSessionSentInit)
+		{
+			CMsgPacker Msg(NETMSG_EDITOR_SESSION_INIT, false);
+			Client()->SendMsgActive(&Msg, MSGFLAG_VITAL);
+			m_CollabSessionSentInit = true;
+			dbg_msg("editor", "Sent NETMSG_EDITOR_SESSION_INIT to server");
+		}
+		// Update requested lock for active layer selection
+		int DesiredGroup = -1;
+		int DesiredLayer = -1;
+		if(!Map()->m_vSelectedLayers.empty())
+		{
+			DesiredGroup = Map()->m_SelectedGroup;
+			DesiredLayer = Map()->m_vSelectedLayers[0];
+		}
+
+		if(m_MyLockedGroup != DesiredGroup || m_MyLockedLayer != DesiredLayer)
+		{
+			// Release previous lock
+			if(m_MyLockedGroup != -1 && m_MyLockedLayer != -1)
+			{
+				CMsgPacker Msg(NETMSG_EDITOR_LOCK, false);
+				Msg.AddInt(m_MyLockedGroup);
+				Msg.AddInt(m_MyLockedLayer);
+				Msg.AddInt(0); // Release
+				Client()->SendMsgActive(&Msg, MSGFLAG_VITAL);
+			}
+
+			m_MyLockedGroup = DesiredGroup;
+			m_MyLockedLayer = DesiredLayer;
+
+			// Request new lock
+			if(m_MyLockedGroup != -1 && m_MyLockedLayer != -1)
+			{
+				CMsgPacker Msg(NETMSG_EDITOR_LOCK, false);
+				Msg.AddInt(m_MyLockedGroup);
+				Msg.AddInt(m_MyLockedLayer);
+				Msg.AddInt(1); // Request
+				Client()->SendMsgActive(&Msg, MSGFLAG_VITAL);
+			}
+		}
+
+		// Send updates every 5 game ticks (approximately 10Hz)
+		if(Client()->GameTick(g_Config.m_ClDummy) % 5 == 0)
+		{
+			vec2 Pos = MapView()->MouseWorldNoParaPos();
+			int ActiveLayer = -1;
+			if(!Map()->m_vSelectedLayers.empty())
+				ActiveLayer = Map()->m_vSelectedLayers[0];
+
+			CMsgPacker Msg(NETMSG_EDITOR_CURSOR, false);
+			Msg.AddInt((int)Pos.x);
+			Msg.AddInt((int)Pos.y);
+			Msg.AddInt(ActiveLayer);
+			Client()->SendMsgActive(&Msg, 0); // Send unreliable
+		}
+
+		// Update remote creators' interpolated cursor positions
+		float dt = Client()->RenderFrameTime();
+		for(auto &Pair : m_RemoteCreators)
+		{
+			SCreatorInfo &Info = Pair.second;
+			float Dist = distance(Info.m_CursorPos, Info.m_TargetPos);
+			if(Dist > 1000.0f)
+			{
+				Info.m_CursorPos = Info.m_TargetPos;
+			}
+			else if(Dist > 0.01f)
+			{
+				float Speed = 15.0f; // Interpolation speed constant
+				float Factor = 1.0f - std::exp(-Speed * dt);
+				if(Factor > 1.0f) Factor = 1.0f;
+				Info.m_CursorPos += (Info.m_TargetPos - Info.m_CursorPos) * Factor;
+			}
+			else
+			{
+				Info.m_CursorPos = Info.m_TargetPos;
+			}
+		}
+
+		// Periodically clean up stale remote cursors (inactive for > 5 seconds)
+		float CurrentTime = Client()->LocalTime();
+		for(auto it = m_RemoteCreators.begin(); it != m_RemoteCreators.end();)
+		{
+			if(CurrentTime - it->second.m_LastUpdate > 5.0f)
+			{
+				it = m_RemoteCreators.erase(it);
+			}
+			else
+			{
+				++it;
+			}
+		}
+	}
+	else
+	{
+		m_MyLockedGroup = -1;
+		m_MyLockedLayer = -1;
+		m_RemoteLocks.clear();
+		m_CollabSessionSentInit = false;
+	}
 }
 
 void CEditor::OnActivate()

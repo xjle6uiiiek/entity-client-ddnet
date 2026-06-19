@@ -34,11 +34,15 @@ protected:
 class CEditorBrushDrawAction : public IEditorAction
 {
 public:
-	CEditorBrushDrawAction(CEditorMap *pMap, int Group);
+	CEditorBrushDrawAction(CEditorMap *pMap, int Group, bool FromHistory = true);
 
 	void Undo() override;
 	void Redo() override;
 	bool IsEmpty() override;
+
+	int GetType() const override { return 1; } // 1 for Brush Draw
+	void Serialize(class CPacker *pPacker) const override;
+	static std::shared_ptr<CEditorBrushDrawAction> Deserialize(CEditorMap *pMap, class CUnpacker *pUnpacker);
 
 private:
 	int m_Group;
